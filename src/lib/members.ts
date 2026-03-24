@@ -6,8 +6,8 @@ export interface MemberInfo {
 export const MEMBERS: MemberInfo[] = [
   { name: "Sinuhe Shin", email: "sinuheshin@gmail.com" },
   { name: "Pedro Djekic Costa", email: "" },
-  { name: "Isadora", email: "" },
-  { name: "Louise", email: "" },
+  { name: "Isadora Souza", email: "isadora.mendespsouza@gmail.com" },
+  { name: "Louise Estorani", email: "" },
   { name: "Pedro Duarte", email: "" },
   { name: "Bob Muterle", email: "" },
   { name: "Rafael Tinti", email: "" },
