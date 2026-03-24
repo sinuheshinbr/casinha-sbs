@@ -6,7 +6,7 @@ export interface MemberInfo {
 
 export const MEMBERS: MemberInfo[] = [
   { name: "Sinuhe Shin", email: "sinuheshin@gmail.com", permissions: ["finance"] },
-  { name: "Pedro Djekic Costa", email: "", permissions: ["finance"] },
+  { name: "Pedro Djekic Costa", email: "pedrodjekic@gmail.com", permissions: ["finance"] },
   { name: "Isadora Souza", email: "isadora.mendespsouza@gmail.com", permissions: [] },
   { name: "Louise Estorani", email: "estoranimendes@gmail.com", permissions: [] },
   { name: "Pedro Duarte", email: "pedrofnd@gmail.com", permissions: [] },
