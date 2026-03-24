@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getMemberByEmail, canEditFinance, MEMBERS } from "@/lib/members";
 import {
@@ -22,14 +23,16 @@ export default async function FinanceiroPage({
   searchParams: Promise<{ m?: string }>;
 }) {
   const session = await auth();
-  const member = getMemberByEmail(session!.user!.email!);
+  if (!session?.user?.email) redirect("/login");
+  const member = getMemberByEmail(session.user.email);
+  if (!member) redirect("/login");
 
   const { m } = await searchParams;
   const currentMonth = getCurrentMonth();
   const month = m || currentMonth;
   const prevMonth = shiftMonth(month, -1);
   const nextMonth = shiftMonth(month, 1);
-  const isAdmin = canEditFinance(member!.name);
+  const isAdmin = canEditFinance(member.name);
 
   const [expenses, payments, income, caixaBalance] = await Promise.all([
     getExpenses(month),

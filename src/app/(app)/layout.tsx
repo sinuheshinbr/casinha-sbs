@@ -1,6 +1,6 @@
 import { auth, signOut } from "@/auth";
 import { getMemberByEmail } from "@/lib/members";
-import { redirect } from "next/navigation";
+import Link from "next/link";
 import NavTabs from "@/components/NavTabs";
 
 export default async function AppLayout({
@@ -9,10 +9,9 @@ export default async function AppLayout({
   children: React.ReactNode;
 }) {
   const session = await auth();
-  if (!session?.user?.email) redirect("/login");
-
-  const member = getMemberByEmail(session.user.email);
-  if (!member) redirect("/login");
+  const member = session?.user?.email
+    ? getMemberByEmail(session.user.email)
+    : null;
 
   return (
     <div className="min-h-screen bg-stone-50">
@@ -28,23 +27,34 @@ export default async function AppLayout({
               </p>
             </div>
             <div className="text-right">
-              <p className="text-green-100 text-sm">{member.name}</p>
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/login" });
-                }}
-              >
-                <button
-                  type="submit"
-                  className="text-green-300 hover:text-white text-xs underline"
+              {member ? (
+                <>
+                  <p className="text-green-100 text-sm">{member.name}</p>
+                  <form
+                    action={async () => {
+                      "use server";
+                      await signOut({ redirectTo: "/login" });
+                    }}
+                  >
+                    <button
+                      type="submit"
+                      className="text-green-300 hover:text-white text-xs underline"
+                    >
+                      Sair
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <Link
+                  href="/login"
+                  className="text-green-200 hover:text-white text-sm font-medium"
                 >
-                  Sair
-                </button>
-              </form>
+                  Entrar
+                </Link>
+              )}
             </div>
           </div>
-          <NavTabs />
+          <NavTabs isLoggedIn={!!member} />
         </div>
       </header>
 

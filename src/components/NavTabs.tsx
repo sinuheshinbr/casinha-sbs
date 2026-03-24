@@ -4,23 +4,22 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "Reservas" },
-  { href: "/info", label: "Info" },
-  { href: "/regras", label: "Regras" },
-  { href: "/financeiro", label: "Financeiro" },
-  { href: "/localizacao", label: "Localização" },
+  { href: "/reservas", label: "Reservas", auth: true },
+  { href: "/financeiro", label: "Financeiro", auth: true },
+  { href: "/info", label: "Info", auth: false },
+  { href: "/regras", label: "Regras", auth: false },
+  { href: "/localizacao", label: "Localização", auth: false },
 ];
 
-export default function NavTabs() {
+export default function NavTabs({ isLoggedIn }: { isLoggedIn: boolean }) {
   const pathname = usePathname();
+
+  const visibleTabs = TABS.filter((tab) => !tab.auth || isLoggedIn);
 
   return (
     <nav className="flex gap-1 overflow-x-auto">
-      {TABS.map((tab) => {
-        const isActive =
-          tab.href === "/"
-            ? pathname === "/"
-            : pathname.startsWith(tab.href);
+      {visibleTabs.map((tab) => {
+        const isActive = pathname.startsWith(tab.href);
         return (
           <Link
             key={tab.href}
