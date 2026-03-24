@@ -9,7 +9,7 @@ export const MEMBERS: MemberInfo[] = [
   { name: "Pedro Djekic Costa", email: "", permissions: ["finance"] },
   { name: "Isadora Souza", email: "isadora.mendespsouza@gmail.com", permissions: [] },
   { name: "Louise Estorani", email: "estoranimendes@gmail.com", permissions: [] },
-  { name: "Pedro Duarte", email: "", permissions: [] },
+  { name: "Pedro Duarte", email: "pedrofnd@gmail.com", permissions: [] },
   { name: "Bob Muterle", email: "", permissions: [] },
   { name: "Rafael Tinti", email: "rafaeltintiogalla@gmail.com", permissions: [] },
   { name: "Sami", email: "", permissions: [] },
