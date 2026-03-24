@@ -2,13 +2,22 @@
 
 import { useState } from "react";
 
-export default function InfoPage() {
-  const [copied, setCopied] = useState(false);
+const PIX_KEY = "a1f47c82-c2f7-4ec1-80d4-6dcc5c05da16";
 
-  function handleCopy() {
+export default function InfoPage() {
+  const [copiedWifi, setCopiedWifi] = useState(false);
+  const [copiedPix, setCopiedPix] = useState(false);
+
+  function handleCopyWifi() {
     navigator.clipboard.writeText("99992021");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    setCopiedWifi(true);
+    setTimeout(() => setCopiedWifi(false), 2000);
+  }
+
+  function handleCopyPix() {
+    navigator.clipboard.writeText(PIX_KEY);
+    setCopiedPix(true);
+    setTimeout(() => setCopiedPix(false), 2000);
   }
 
   return (
@@ -27,13 +36,26 @@ export default function InfoPage() {
             <div className="flex items-center gap-2">
               <code className="font-medium text-stone-800">99992021</code>
               <button
-                onClick={handleCopy}
+                onClick={handleCopyWifi}
                 className="text-xs text-green-700 hover:text-green-900 font-medium"
               >
-                {copied ? "Copiado!" : "Copiar"}
+                {copiedWifi ? "Copiado!" : "Copiar"}
               </button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-lg shadow p-4">
+        <h3 className="font-medium text-stone-800 mb-3">Chave PIX da Casinha</h3>
+        <div className="bg-stone-50 rounded-lg p-3 flex items-center justify-between gap-3">
+          <code className="text-sm text-stone-700 break-all">{PIX_KEY}</code>
+          <button
+            onClick={handleCopyPix}
+            className="shrink-0 text-xs text-green-700 hover:text-green-900 font-medium"
+          >
+            {copiedPix ? "Copiado!" : "Copiar"}
+          </button>
         </div>
       </div>
     </div>

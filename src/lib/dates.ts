@@ -58,3 +58,23 @@ function formatDateBR(d: Date): string {
     month: "long",
   });
 }
+
+// Month helpers for financeiro
+export function getCurrentMonth(): string {
+  const now = getSaoPauloNow();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+
+export function shiftMonth(month: string, offset: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + offset, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export function formatMonthBR(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1, 1);
+  return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+}
