@@ -12,8 +12,8 @@ export const MEMBERS: MemberInfo[] = [
   { name: "Bob Muterle", email: "" },
   { name: "Rafael Tinti", email: "" },
   { name: "Sami", email: "" },
-  { name: "Tomás", email: "" },
-  { name: "Vinicius Duque", email: "" },
+  { name: "Tomás", email: "tomkovensky@gmail.com" },
+  { name: "Vinicius Duque", email: "vinduque@gmail.com" },
 ];
 
 export const TOTAL_SPOTS = 8;
