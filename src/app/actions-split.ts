@@ -328,8 +328,6 @@ export async function removeTripExpense(id: string) {
     .collection("trip_expenses")
     .findOne({ _id: new ObjectId(id) });
   if (!doc) return { error: "Não encontrada" };
-  if (doc.paidBy !== user.email)
-    return { error: "Apenas quem pagou pode remover" };
 
   await db
     .collection("trip_expenses")

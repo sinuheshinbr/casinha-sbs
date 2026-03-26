@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { capitalize } from "@/lib/capitalize";
 import {
   createTrip,
   deleteTrip,
@@ -373,7 +374,7 @@ export function TripDetail({
               <div className="flex items-center justify-between">
                 <div className="min-w-0 flex-1">
                   <span className="text-sm text-stone-800">
-                    {exp.description}
+                    {capitalize(exp.description)}
                   </span>
                   <span className="text-xs text-stone-400 ml-2">
                     {nameMap.get(exp.paidBy) ?? exp.paidBy}
@@ -383,15 +384,13 @@ export function TripDetail({
                   <span className="text-sm font-medium text-stone-700">
                     {currency(exp.amount)}
                   </span>
-                  {exp.paidBy === userEmail && (
-                    <button
+                  <button
                       onClick={() => handleRemove(exp._id)}
                       disabled={isPending}
                       className="text-stone-400 hover:text-red-500 text-lg font-bold px-1"
                     >
                       &times;
                     </button>
-                  )}
                 </div>
               </div>
               {isPartial && (
