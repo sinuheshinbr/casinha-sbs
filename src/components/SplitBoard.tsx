@@ -594,6 +594,12 @@ function PaymentsSection({
                     <span className="text-xs text-stone-600 font-mono bg-stone-50 px-1.5 py-0.5 rounded select-all">
                       {formatPixDisplay(toPixKey)}
                     </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(toPixKey)}
+                      className="text-xs text-green-700 hover:text-green-900 font-medium"
+                    >
+                      Copiar
+                    </button>
                   </div>
                 )}
                 {isReceiver && (
