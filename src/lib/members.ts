@@ -12,7 +12,7 @@ export const MEMBERS: MemberInfo[] = [
   { name: "Pedro Duarte", email: "pedrofnd@gmail.com", permissions: [] },
   { name: "Bob Muterle", email: "", permissions: [] },
   { name: "Rafael Tinti", email: "rafaeltintiogalla@gmail.com", permissions: [] },
-  { name: "Sami", email: "", permissions: [] },
+  { name: "Sami", email: "sami@electisp.com.br", permissions: [] },
   { name: "Tomás", email: "tomkovensky@gmail.com", permissions: [] },
   { name: "Vinicius Duque", email: "vinduque@gmail.com", permissions: [] },
 ];
