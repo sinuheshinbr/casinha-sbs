@@ -10,12 +10,18 @@ import {
 } from "@/app/actions";
 import type { Reservation } from "@/app/actions";
 
+interface MemberEntry {
+  email: string;
+  name: string;
+}
+
 interface Props {
   reservations: Reservation[];
   declines: string[];
-  allMemberNames: string[];
+  allMembers: MemberEntry[];
+  nameMap: Record<string, string>;
   totalSpots: number;
-  memberName: string;
+  memberEmail: string;
   weekendKey: string;
   isPast: boolean;
 }
@@ -23,12 +29,14 @@ interface Props {
 export default function ReservationBoard({
   reservations,
   declines,
-  allMemberNames,
+  allMembers,
+  nameMap: nameMapProp,
   totalSpots,
-  memberName,
+  memberEmail,
   weekendKey,
   isPast,
 }: Props) {
+  const nameMap = new Map(Object.entries(nameMapProp));
   const [guestName, setGuestName] = useState("");
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -43,13 +51,13 @@ export default function ReservationBoard({
 
   const spotsAvailable = totalSpots - activeReservations.length;
   const hasOwnReservation = memberReservations.some(
-    (r) => r.memberName === memberName
+    (r) => r.memberEmail === memberEmail
   );
-  const hasDeclined = declines.includes(memberName);
+  const hasDeclined = declines.includes(memberEmail);
 
-  const goingNames = memberReservations.map((r) => r.memberName);
-  const noResponse = allMemberNames.filter(
-    (name) => !goingNames.includes(name) && !declines.includes(name)
+  const goingEmails = memberReservations.map((r) => r.memberEmail);
+  const noResponse = allMembers.filter(
+    (m) => !goingEmails.includes(m.email) && !declines.includes(m.email)
   );
 
   function handleReserveMember() {
@@ -98,7 +106,7 @@ export default function ReservationBoard({
   }
 
   function ReservationCard({ reservation }: { reservation: Reservation }) {
-    const isOwn = reservation.memberName === memberName;
+    const isOwn = reservation.memberEmail === memberEmail;
     return (
       <div
         className={`bg-white rounded-lg shadow p-3 border-l-4 ${
@@ -110,11 +118,11 @@ export default function ReservationBoard({
             <p className="font-medium text-stone-800 truncate">
               {reservation.isGuest
                 ? reservation.guestName
-                : reservation.memberName}
+                : nameMap.get(reservation.memberEmail) ?? reservation.memberEmail}
             </p>
             <p className="text-xs text-stone-500">
               {reservation.isGuest
-                ? `Visitante de ${reservation.memberName}`
+                ? `Visitante de ${nameMap.get(reservation.memberEmail) ?? reservation.memberEmail}`
                 : "Morador"}
             </p>
           </div>
@@ -162,7 +170,7 @@ export default function ReservationBoard({
       {waitlist.length > 0 && (
         <div className="grid grid-cols-2 gap-3 mb-6">
           {waitlist.map((reservation) => {
-            const isOwn = reservation.memberName === memberName;
+            const isOwn = reservation.memberEmail === memberEmail;
             return (
               <div
                 key={reservation._id}
@@ -177,7 +185,7 @@ export default function ReservationBoard({
                       Aguardando vaga...
                     </p>
                     <p className="text-xs text-stone-400">
-                      Visitante de {reservation.memberName}
+                      Visitante de {nameMap.get(reservation.memberEmail) ?? reservation.memberEmail}
                     </p>
                   </div>
                   {isOwn && !isPast && (
@@ -206,9 +214,9 @@ export default function ReservationBoard({
                 Não vão
               </p>
               <div className="space-y-1">
-                {declines.map((name) => (
-                  <p key={name} className="text-stone-400 line-through">
-                    {name}
+                {declines.map((email) => (
+                  <p key={email} className="text-stone-400 line-through">
+                    {nameMap.get(email) ?? email}
                   </p>
                 ))}
               </div>
@@ -220,9 +228,9 @@ export default function ReservationBoard({
                 Sem resposta
               </p>
               <div className="space-y-1">
-                {noResponse.map((name) => (
-                  <p key={name} className="text-stone-400">
-                    {name}
+                {noResponse.map((m) => (
+                  <p key={m.email} className="text-stone-400">
+                    {m.name}
                   </p>
                 ))}
               </div>

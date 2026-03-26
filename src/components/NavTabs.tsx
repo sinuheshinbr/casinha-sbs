@@ -3,19 +3,30 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const TABS = [
-  { href: "/reservas", label: "Reservas", auth: true },
-  { href: "/financeiro", label: "Financeiro", auth: true },
-  { href: "/benfeitorias", label: "Benfeitorias", auth: true },
-  { href: "/info", label: "Info", auth: false },
-  { href: "/regras", label: "Regras", auth: false },
-  { href: "/localizacao", label: "Localização", auth: false },
+const TABS: { href: string; label: string; visibility: "public" | "auth" | "member" }[] = [
+  { href: "/reservas", label: "Reservas", visibility: "member" },
+  { href: "/financeiro", label: "Financeiro", visibility: "member" },
+  { href: "/benfeitorias", label: "Benfeitorias", visibility: "member" },
+  { href: "/split", label: "Split", visibility: "auth" },
+  { href: "/info", label: "Info", visibility: "public" },
+  { href: "/regras", label: "Regras", visibility: "public" },
+  { href: "/localizacao", label: "Localização", visibility: "public" },
 ];
 
-export default function NavTabs({ isLoggedIn }: { isLoggedIn: boolean }) {
+export default function NavTabs({
+  isLoggedIn,
+  isMember,
+}: {
+  isLoggedIn: boolean;
+  isMember: boolean;
+}) {
   const pathname = usePathname();
 
-  const visibleTabs = TABS.filter((tab) => !tab.auth || isLoggedIn);
+  const visibleTabs = TABS.filter((tab) => {
+    if (tab.visibility === "public") return true;
+    if (tab.visibility === "auth") return isLoggedIn;
+    return isMember;
+  });
 
   return (
     <nav className="flex gap-1 overflow-x-auto">

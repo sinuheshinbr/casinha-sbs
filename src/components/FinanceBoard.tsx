@@ -11,13 +11,18 @@ import {
 } from "@/app/actions-finance";
 import type { Expense, MemberPayment, Income } from "@/app/actions-finance";
 
+interface MemberEntry {
+  email: string;
+  name: string;
+}
+
 interface Props {
   month: string;
   expenses: Expense[];
   payments: MemberPayment[];
   income: Income[];
   totalExpenses: number;
-  allMemberNames: string[];
+  members: MemberEntry[];
   isAdmin: boolean;
 }
 
@@ -50,13 +55,13 @@ export default function FinanceBoard({
   payments,
   income,
   totalExpenses,
-  allMemberNames,
+  members,
   isAdmin,
 }: Props) {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
 
-  const paidMap = new Map(payments.map((p) => [p.memberName, p]));
+  const paidMap = new Map(payments.map((p) => [p.memberEmail, p]));
   const totalIncome = income.reduce((s, i) => s + i.amount, 0);
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
 
@@ -70,10 +75,10 @@ export default function FinanceBoard({
   const totalRateio = rateioExpenses.reduce((s, e) => s + e.amount, 0);
   const totalOther = otherExpenses.reduce((s, e) => s + e.amount, 0);
   const monthlyContribution =
-    allMemberNames.length > 0
-      ? Math.ceil((totalRateio / allMemberNames.length) * 100) / 100
+    members.length > 0
+      ? Math.ceil((totalRateio / members.length) * 100) / 100
       : 0;
-  const expectedTotal = allMemberNames.length * monthlyContribution;
+  const expectedTotal = members.length * monthlyContribution;
   const pendingTotal = expectedTotal - totalPaid;
 
   return (
@@ -145,11 +150,11 @@ export default function FinanceBoard({
         </div>
 
         <div className="space-y-2">
-          {allMemberNames.map((name) => {
-            const payment = paidMap.get(name);
+          {members.map((m) => {
+            const payment = paidMap.get(m.email);
             return (
               <div
-                key={name}
+                key={m.email}
                 className="flex items-center justify-between py-1.5"
               >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -161,7 +166,7 @@ export default function FinanceBoard({
                     className={`text-sm truncate ${payment ? "text-stone-500" : "text-stone-800"
                       }`}
                   >
-                    {name}
+                    {m.name}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -189,7 +194,7 @@ export default function FinanceBoard({
                     </>
                   ) : isAdmin ? (
                     <MemberPayRow
-                      name={name}
+                      email={m.email}
                       month={month}
                       defaultAmount={monthlyContribution}
                       isPending={isPending}
@@ -209,7 +214,7 @@ export default function FinanceBoard({
 
         <div className="border-t border-stone-200 mt-3 pt-3 flex justify-between text-sm">
           <span className="text-stone-500">
-            {payments.length}/{allMemberNames.length} pagaram
+            {payments.length}/{members.length} pagaram
           </span>
           {pendingTotal > 0 ? (
             <span className="text-amber-600 font-medium">
@@ -275,14 +280,14 @@ export default function FinanceBoard({
 // --- Member Pay Row ---
 
 function MemberPayRow({
-  name,
+  email,
   month,
   defaultAmount,
   isPending,
   startTransition,
   setError,
 }: {
-  name: string;
+  email: string;
   month: string;
   defaultAmount: number;
   isPending: boolean;
@@ -296,7 +301,7 @@ function MemberPayRow({
     if (!val || val <= 0) return;
     setError("");
     startTransition(async () => {
-      const r = await markPaid(month, name, val);
+      const r = await markPaid(month, email, val);
       if (r.error) setError(r.error);
     });
   }

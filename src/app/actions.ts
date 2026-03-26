@@ -10,7 +10,7 @@ import { auth } from "@/auth";
 export interface Reservation {
   _id: string;
   weekendDate: string;
-  memberName: string;
+  memberEmail: string;
   isGuest: boolean;
   guestName?: string;
   createdAt: string;
@@ -19,7 +19,13 @@ export interface Reservation {
 async function getAuthenticatedMember() {
   const session = await auth();
   if (!session?.user?.email) return null;
-  return getMemberByEmail(session.user.email) ?? null;
+  const member = getMemberByEmail(session.user.email);
+  if (!member) return null;
+  return {
+    ...member,
+    email: member.email.toLowerCase(),
+    name: session.user.name ?? member.name,
+  };
 }
 
 function validateWeekendKey(weekendKey: string): boolean {
@@ -48,7 +54,7 @@ export async function getReservations(
   return docs.map((doc) => ({
     _id: doc._id.toString(),
     weekendDate: doc.weekendDate as string,
-    memberName: doc.memberName as string,
+    memberEmail: doc.memberEmail as string,
     isGuest: doc.isGuest as boolean,
     guestName: doc.guestName as string | undefined,
     createdAt: (doc.createdAt as Date).toISOString(),
@@ -66,7 +72,7 @@ export async function createMemberReservation(weekendKey: string) {
 
   const existing = await col.findOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
     isGuest: false,
   });
   if (existing) return { error: "Você já reservou sua vaga" };
@@ -81,7 +87,7 @@ export async function createMemberReservation(weekendKey: string) {
 
   await col.insertOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
     isGuest: false,
     createdAt: new Date(),
   });
@@ -107,7 +113,7 @@ export async function createGuestReservation(
 
   await db.collection("reservations").insertOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
     isGuest: true,
     guestName: guestName.trim(),
     createdAt: new Date(),
@@ -124,7 +130,7 @@ export async function getDeclines(weekendKey: string): Promise<string[]> {
     .collection("declines")
     .find({ weekendDate: weekendKey })
     .toArray();
-  return docs.map((doc) => doc.memberName as string);
+  return docs.map((doc) => doc.memberEmail as string);
 }
 
 export async function declineWeekend(weekendKey: string) {
@@ -138,19 +144,19 @@ export async function declineWeekend(weekendKey: string) {
 
   const existing = await db.collection("declines").findOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
   });
   if (existing) return { error: "Você já marcou que não vai" };
 
   // Remove reserva própria e de visitantes se existir
   await db.collection("reservations").deleteMany({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
   });
 
   await db.collection("declines").insertOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
     createdAt: new Date(),
   });
 
@@ -168,7 +174,7 @@ export async function undoDecline(weekendKey: string) {
   const db = getDb();
   await db.collection("declines").deleteOne({
     weekendDate: weekendKey,
-    memberName: member.name,
+    memberEmail: member.email,
   });
 
   revalidatePath("/");
@@ -185,7 +191,7 @@ export async function cancelReservation(id: string) {
     .collection("reservations")
     .findOne({ _id: new ObjectId(id) });
   if (!reservation) return { error: "Reserva não encontrada" };
-  if (reservation.memberName !== member.name) {
+  if (reservation.memberEmail !== member.email) {
     return { error: "Você só pode cancelar suas próprias reservas" };
   }
   if (isPastWeekend(reservation.weekendDate as string)) {

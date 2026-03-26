@@ -14,15 +14,20 @@ function currency(value: number): string {
 
 interface Props {
   benfeitorias: Benfeitoria[];
-  memberName: string;
+  memberEmail: string;
+  nameMap: Record<string, string>;
 }
 
-export default function BenfeitoriasBoard({ benfeitorias, memberName }: Props) {
+export default function BenfeitoriasBoard({ benfeitorias, memberEmail, nameMap }: Props) {
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [description, setDescription] = useState("");
   const [budget, setBudget] = useState("");
+
+  function resolveName(email: string): string {
+    return nameMap[email] ?? email;
+  }
 
   function handleAdd() {
     const val = parseFloat(budget.replace(",", "."));
@@ -73,9 +78,9 @@ export default function BenfeitoriasBoard({ benfeitorias, memberName }: Props) {
         </div>
       )}
 
-      {benfeitorias.map((b, i) => {
-        const hasVoted = b.votes.includes(memberName);
-        const isAuthor = b.createdBy === memberName;
+      {benfeitorias.map((b) => {
+        const hasVoted = b.votes.includes(memberEmail);
+        const isAuthor = b.createdBy === memberEmail;
         return (
           <div key={b._id} className="bg-white rounded-lg shadow p-4">
             <div className="flex items-start gap-3">
@@ -119,7 +124,7 @@ export default function BenfeitoriasBoard({ benfeitorias, memberName }: Props) {
                     {currency(b.budget)}
                   </span>
                   <span className="text-xs text-stone-400">
-                    por {b.createdBy}
+                    por {resolveName(b.createdBy)}
                   </span>
                 </div>
               </div>

@@ -19,7 +19,7 @@ export interface Expense {
 export interface MemberPayment {
   _id: string;
   month: string;
-  memberName: string;
+  memberEmail: string;
   amount: number;
   paidAt: string;
 }
@@ -103,31 +103,32 @@ export async function getPayments(month: string): Promise<MemberPayment[]> {
   const docs = await db
     .collection("member_payments")
     .find({ month })
-    .sort({ memberName: 1 })
+    .sort({ memberEmail: 1 })
     .toArray();
   return docs.map((doc) => ({
     _id: doc._id.toString(),
     month: doc.month as string,
-    memberName: doc.memberName as string,
+    memberEmail: doc.memberEmail as string,
     amount: doc.amount as number,
     paidAt: (doc.paidAt as Date).toISOString(),
   }));
 }
 
-export async function markPaid(month: string, memberName: string, amount: number) {
+export async function markPaid(month: string, memberEmail: string, amount: number) {
   const admin = await requireFinanceAdmin();
   if (!admin) return { error: "Sem permissão" };
-  if (!MEMBERS.find((m) => m.name === memberName)) return { error: "Membro inválido" };
+  if (!MEMBERS.find((m) => m.email.toLowerCase() === memberEmail.toLowerCase()))
+    return { error: "Membro inválido" };
 
   const db = getDb();
   const existing = await db
     .collection("member_payments")
-    .findOne({ month, memberName });
+    .findOne({ month, memberEmail });
   if (existing) return { error: "Já marcado como pago" };
 
   await db.collection("member_payments").insertOne({
     month,
-    memberName,
+    memberEmail,
     amount,
     paidAt: new Date(),
   });

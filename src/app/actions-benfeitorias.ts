@@ -18,7 +18,9 @@ export interface Benfeitoria {
 async function requireMember() {
   const session = await auth();
   if (!session?.user?.email) return null;
-  return getMemberByEmail(session.user.email) ?? null;
+  const member = getMemberByEmail(session.user.email);
+  if (!member) return null;
+  return { ...member, email: member.email.toLowerCase() };
 }
 
 export async function getBenfeitorias(): Promise<Benfeitoria[]> {
@@ -52,7 +54,7 @@ export async function addBenfeitoria(description: string, budget: number) {
   await db.collection("benfeitorias").insertOne({
     description: description.trim(),
     budget,
-    createdBy: member.name,
+    createdBy: member.email,
     createdAt: new Date(),
     votes: [],
   });
@@ -70,7 +72,7 @@ export async function removeBenfeitoria(id: string) {
     .collection("benfeitorias")
     .findOne({ _id: new ObjectId(id) });
   if (!doc) return { error: "Não encontrada" };
-  if (doc.createdBy !== member.name)
+  if (doc.createdBy !== member.email)
     return { error: "Apenas o autor pode remover" };
 
   await db.collection("benfeitorias").deleteOne({ _id: new ObjectId(id) });
@@ -89,21 +91,21 @@ export async function toggleVote(id: string) {
   if (!doc) return { error: "Não encontrada" };
 
   const votes = (doc.votes as string[]) ?? [];
-  const hasVoted = votes.includes(member.name);
+  const hasVoted = votes.includes(member.email);
 
   if (hasVoted) {
     await db
       .collection("benfeitorias")
       .updateOne(
         { _id: new ObjectId(id) },
-        { $pull: { votes: member.name } } as any
+        { $pull: { votes: member.email } } as any
       );
   } else {
     await db
       .collection("benfeitorias")
       .updateOne(
         { _id: new ObjectId(id) },
-        { $push: { votes: member.name } } as any
+        { $push: { votes: member.email } } as any
       );
   }
 

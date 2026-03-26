@@ -14,14 +14,8 @@ export default async function LoginPage({
           Casinha São Bento
         </h1>
         <p className="text-stone-500 text-sm mb-6">
-          Faça login para gerenciar suas reservas
+          Faça login com sua conta Google
         </p>
-
-        {error === "AccessDenied" && (
-          <div className="bg-red-50 text-red-700 text-sm p-3 rounded mb-4">
-            Seu email não está cadastrado como morador.
-          </div>
-        )}
 
         <form
           action={async () => {

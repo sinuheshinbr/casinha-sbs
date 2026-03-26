@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getMemberByEmail, canEditFinance, MEMBERS } from "@/lib/members";
+import { getDb } from "@/lib/mongodb";
 import {
   getCurrentMonth,
   shiftMonth,
@@ -42,7 +43,24 @@ export default async function FinanceiroPage({
   ]);
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
-  const allMemberNames = MEMBERS.map((m) => m.name);
+
+  const db = getDb();
+  const memberEmails = MEMBERS.map((m) => m.email.toLowerCase()).filter(Boolean);
+  const dbUsers = await db
+    .collection("users")
+    .find({ email: { $in: memberEmails } })
+    .toArray();
+  const nameMap = new Map<string, string>();
+  for (const m of MEMBERS) {
+    if (m.email) nameMap.set(m.email.toLowerCase(), m.name);
+  }
+  for (const u of dbUsers) {
+    nameMap.set(u.email as string, u.name as string);
+  }
+  const allMembers = MEMBERS.filter((m) => m.email).map((m) => ({
+    email: m.email.toLowerCase(),
+    name: nameMap.get(m.email.toLowerCase()) || m.name,
+  }));
 
   return (
     <div className="space-y-4">
@@ -110,7 +128,7 @@ export default async function FinanceiroPage({
         payments={payments}
         income={income}
         totalExpenses={totalExpenses}
-        allMemberNames={allMemberNames}
+        members={allMembers}
         isAdmin={isAdmin}
       />
     </div>

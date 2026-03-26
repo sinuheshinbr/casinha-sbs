@@ -5,10 +5,10 @@ import {
   getWeekendInfo,
   shiftWeekend,
 } from "@/lib/dates";
-import { TOTAL_SPOTS, MEMBERS } from "@/lib/members";
+import { TOTAL_SPOTS, MEMBERS, getMemberByEmail } from "@/lib/members";
+import { getDb } from "@/lib/mongodb";
 import ReservationBoard from "@/components/ReservationBoard";
 import { auth } from "@/auth";
-import { getMemberByEmail } from "@/lib/members";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,27 @@ export default async function ReservasPage({
     getDeclines(weekendKey),
   ]);
   const activeCount = Math.min(reservations.length, TOTAL_SPOTS);
-  const allMemberNames = MEMBERS.map((m) => m.name);
+  const db = getDb();
+  const memberEmails = MEMBERS.filter((m) => m.email).map((m) => m.email.toLowerCase());
+  const reservationEmails = reservations.map((r) => r.memberEmail).filter(Boolean);
+  const allEmails = [...new Set([...memberEmails, ...reservationEmails])];
+  const dbUsers = await db
+    .collection("users")
+    .find({ email: { $in: allEmails } })
+    .toArray();
+  const nameMap = new Map<string, string>();
+  // MEMBERS como fallback
+  for (const m of MEMBERS) {
+    if (m.email) nameMap.set(m.email.toLowerCase(), m.name);
+  }
+  // DB sobrescreve
+  for (const u of dbUsers) {
+    nameMap.set(u.email as string, u.name as string);
+  }
+  const allMembers = MEMBERS.filter((m) => m.email).map((m) => ({
+    email: m.email.toLowerCase(),
+    name: nameMap.get(m.email.toLowerCase()) || m.name,
+  }));
 
   return (
     <>
@@ -80,9 +100,10 @@ export default async function ReservasPage({
       <ReservationBoard
         reservations={reservations}
         declines={declines}
-        allMemberNames={allMemberNames}
+        allMembers={allMembers}
+        nameMap={Object.fromEntries(nameMap)}
         totalSpots={TOTAL_SPOTS}
-        memberName={member.name}
+        memberEmail={member.email.toLowerCase()}
         weekendKey={weekendKey}
         isPast={isPast}
       />
