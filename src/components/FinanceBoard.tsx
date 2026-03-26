@@ -11,8 +11,6 @@ import {
 } from "@/app/actions-finance";
 import type { Expense, MemberPayment, Income } from "@/app/actions-finance";
 
-const MONTHLY_CONTRIBUTION = 200;
-
 interface Props {
   month: string;
   expenses: Expense[];
@@ -32,9 +30,13 @@ const EXPENSE_CATEGORIES = [
   { value: "outros", label: "Outros" },
 ];
 
-const INCOME_TYPES = [
+const VISITOR_INCOME_TYPES = [
   { value: "visitante", label: "Visitante" },
   { value: "airbnb", label: "Airbnb" },
+  { value: "outros", label: "Outros" },
+];
+
+const OTHER_INCOME_TYPES = [
   { value: "outros", label: "Outros" },
 ];
 
@@ -57,7 +59,21 @@ export default function FinanceBoard({
   const paidMap = new Map(payments.map((p) => [p.memberName, p]));
   const totalIncome = income.reduce((s, i) => s + i.amount, 0);
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
-  const expectedTotal = allMemberNames.length * MONTHLY_CONTRIBUTION;
+
+  const visitorIncome = income.filter((i) => i.visitante);
+  const otherIncome = income.filter((i) => !i.visitante);
+  const totalVisitorIncome = visitorIncome.reduce((s, i) => s + i.amount, 0);
+  const totalOtherIncome = otherIncome.reduce((s, i) => s + i.amount, 0);
+
+  const rateioExpenses = expenses.filter((e) => e.rateio);
+  const otherExpenses = expenses.filter((e) => !e.rateio);
+  const totalRateio = rateioExpenses.reduce((s, e) => s + e.amount, 0);
+  const totalOther = otherExpenses.reduce((s, e) => s + e.amount, 0);
+  const monthlyContribution =
+    allMemberNames.length > 0
+      ? Math.ceil((totalRateio / allMemberNames.length) * 100) / 100
+      : 0;
+  const expectedTotal = allMemberNames.length * monthlyContribution;
   const pendingTotal = expectedTotal - totalPaid;
 
   return (
@@ -81,13 +97,25 @@ export default function FinanceBoard({
           <div className="flex justify-between">
             <span className="text-stone-500">Entradas (visitantes)</span>
             <span className="text-green-700 font-medium">
-              + {currency(totalIncome)}
+              + {currency(totalVisitorIncome)}
             </span>
           </div>
           <div className="flex justify-between">
-            <span className="text-stone-500">Saídas (despesas)</span>
+            <span className="text-stone-500">Outras receitas</span>
+            <span className="text-green-700 font-medium">
+              + {currency(totalOtherIncome)}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-stone-500">Despesas do rateio</span>
             <span className="text-red-600 font-medium">
-              - {currency(totalExpenses)}
+              - {currency(totalRateio)}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-stone-500">Outras despesas</span>
+            <span className="text-red-600 font-medium">
+              - {currency(totalOther)}
             </span>
           </div>
           <div className="border-t border-stone-200 pt-1.5 flex justify-between font-semibold">
@@ -112,7 +140,7 @@ export default function FinanceBoard({
             Contribuição mensal
           </h3>
           <span className="text-sm text-stone-500">
-            {currency(MONTHLY_CONTRIBUTION)}/morador
+            {currency(monthlyContribution)}/morador
           </span>
         </div>
 
@@ -163,13 +191,14 @@ export default function FinanceBoard({
                     <MemberPayRow
                       name={name}
                       month={month}
+                      defaultAmount={monthlyContribution}
                       isPending={isPending}
                       startTransition={startTransition}
                       setError={setError}
                     />
                   ) : (
                     <span className="text-xs text-amber-600 font-medium">
-                      {currency(MONTHLY_CONTRIBUTION)}
+                      {currency(monthlyContribution)}
                     </span>
                   )}
                 </div>
@@ -195,23 +224,49 @@ export default function FinanceBoard({
       {/* Contribuições de visitantes */}
       <IncomeSection
         month={month}
-        income={income}
-        totalIncome={totalIncome}
+        income={visitorIncome}
+        totalIncome={totalVisitorIncome}
         isAdmin={isAdmin}
         isPending={isPending}
         startTransition={startTransition}
         setError={setError}
+        visitante={true}
       />
 
-      {/* Despesas (saídas do caixa) */}
-      <ExpensesSection
+      {/* Outras receitas */}
+      <IncomeSection
         month={month}
-        expenses={expenses}
-        totalExpenses={totalExpenses}
+        income={otherIncome}
+        totalIncome={totalOtherIncome}
         isAdmin={isAdmin}
         isPending={isPending}
         startTransition={startTransition}
         setError={setError}
+        visitante={false}
+      />
+
+      {/* Despesas do rateio */}
+      <ExpensesSection
+        month={month}
+        expenses={rateioExpenses}
+        totalExpenses={totalRateio}
+        isAdmin={isAdmin}
+        isPending={isPending}
+        startTransition={startTransition}
+        setError={setError}
+        rateio={true}
+      />
+
+      {/* Outras despesas */}
+      <ExpensesSection
+        month={month}
+        expenses={otherExpenses}
+        totalExpenses={totalOther}
+        isAdmin={isAdmin}
+        isPending={isPending}
+        startTransition={startTransition}
+        setError={setError}
+        rateio={false}
       />
     </div>
   );
@@ -222,17 +277,19 @@ export default function FinanceBoard({
 function MemberPayRow({
   name,
   month,
+  defaultAmount,
   isPending,
   startTransition,
   setError,
 }: {
   name: string;
   month: string;
+  defaultAmount: number;
   isPending: boolean;
   startTransition: React.TransitionStartFunction;
   setError: (e: string) => void;
 }) {
-  const [amount, setAmount] = useState(String(MONTHLY_CONTRIBUTION));
+  const [amount, setAmount] = useState(String(defaultAmount));
 
   function handlePay() {
     const val = parseFloat(amount.replace(",", "."));
@@ -275,6 +332,7 @@ function ExpensesSection({
   isPending,
   startTransition,
   setError,
+  rateio,
 }: {
   month: string;
   expenses: Expense[];
@@ -283,6 +341,7 @@ function ExpensesSection({
   isPending: boolean;
   startTransition: React.TransitionStartFunction;
   setError: (e: string) => void;
+  rateio: boolean;
 }) {
   const [showForm, setShowForm] = useState(false);
   const [category, setCategory] = useState("aluguel");
@@ -295,7 +354,7 @@ function ExpensesSection({
     setError("");
     startTransition(async () => {
       const label = EXPENSE_CATEGORIES.find((c) => c.value === category)?.label ?? category;
-      const r = await addExpense(month, category, description || label, val);
+      const r = await addExpense(month, category, description || label, val, rateio);
       if (r.error) {
         setError(r.error);
       } else {
@@ -317,7 +376,9 @@ function ExpensesSection({
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex justify-between items-baseline mb-3">
-        <h3 className="font-semibold text-stone-800">Despesas</h3>
+        <h3 className="font-semibold text-stone-800">
+          {rateio ? "Despesas do rateio" : "Outras despesas"}
+        </h3>
         <span className="text-sm font-medium text-red-600">
           - {currency(totalExpenses)}
         </span>
@@ -437,6 +498,7 @@ function IncomeSection({
   isPending,
   startTransition,
   setError,
+  visitante,
 }: {
   month: string;
   income: Income[];
@@ -445,9 +507,10 @@ function IncomeSection({
   isPending: boolean;
   startTransition: React.TransitionStartFunction;
   setError: (e: string) => void;
+  visitante: boolean;
 }) {
   const [showForm, setShowForm] = useState(false);
-  const [type, setType] = useState("visitante");
+  const [type, setType] = useState(visitante ? "visitante" : "outros");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -456,7 +519,7 @@ function IncomeSection({
     if (!val || val <= 0 || !description.trim()) return;
     setError("");
     startTransition(async () => {
-      const r = await addIncome(month, type, description, val);
+      const r = await addIncome(month, type, description, val, visitante);
       if (r.error) {
         setError(r.error);
       } else {
@@ -479,7 +542,7 @@ function IncomeSection({
     <div className="bg-white rounded-lg shadow p-4">
       <div className="flex justify-between items-baseline mb-3">
         <h3 className="font-semibold text-stone-800">
-          Contribuições de visitantes
+          {visitante ? "Contribuições de visitantes" : "Outras receitas"}
         </h3>
         {totalIncome > 0 && (
           <span className="text-sm font-medium text-green-700">
@@ -490,7 +553,7 @@ function IncomeSection({
 
       {income.length === 0 && (
         <p className="text-sm text-stone-400 mb-3">
-          Nenhuma contribuição registrada.
+          {visitante ? "Nenhuma contribuição registrada." : "Nenhuma receita registrada."}
         </p>
       )}
 
@@ -533,7 +596,7 @@ function IncomeSection({
           onClick={() => setShowForm(true)}
           className="text-sm text-green-700 hover:text-green-900 font-medium"
         >
-          + Adicionar contribuição
+          {visitante ? "+ Adicionar contribuição" : "+ Adicionar receita"}
         </button>
       )}
 
@@ -545,7 +608,7 @@ function IncomeSection({
               onChange={(e) => setType(e.target.value)}
               className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white"
             >
-              {INCOME_TYPES.map((t) => (
+              {(visitante ? VISITOR_INCOME_TYPES : OTHER_INCOME_TYPES).map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>

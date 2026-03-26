@@ -13,6 +13,7 @@ export interface Expense {
   category: string;
   description: string;
   amount: number;
+  rateio: boolean;
 }
 
 export interface MemberPayment {
@@ -30,6 +31,7 @@ export interface Income {
   description: string;
   amount: number;
   createdAt: string;
+  visitante: boolean;
 }
 
 // Auth helper
@@ -56,6 +58,7 @@ export async function getExpenses(month: string): Promise<Expense[]> {
     category: doc.category as string,
     description: doc.description as string,
     amount: doc.amount as number,
+    rateio: doc.rateio !== false,
   }));
 }
 
@@ -63,7 +66,8 @@ export async function addExpense(
   month: string,
   category: string,
   description: string,
-  amount: number
+  amount: number,
+  rateio: boolean = true
 ) {
   const admin = await requireFinanceAdmin();
   if (!admin) return { error: "Sem permissão" };
@@ -75,6 +79,7 @@ export async function addExpense(
     category,
     description: description.trim(),
     amount,
+    rateio,
   });
 
   revalidatePath("/financeiro");
@@ -157,6 +162,7 @@ export async function getIncome(month: string): Promise<Income[]> {
     description: doc.description as string,
     amount: doc.amount as number,
     createdAt: (doc.createdAt as Date).toISOString(),
+    visitante: doc.visitante !== false,
   }));
 }
 
@@ -164,7 +170,8 @@ export async function addIncome(
   month: string,
   type: string,
   description: string,
-  amount: number
+  amount: number,
+  visitante: boolean = true
 ) {
   const admin = await requireFinanceAdmin();
   if (!admin) return { error: "Sem permissão" };
@@ -177,6 +184,7 @@ export async function addIncome(
     description: description.trim(),
     amount,
     createdAt: new Date(),
+    visitante,
   });
 
   revalidatePath("/financeiro");
