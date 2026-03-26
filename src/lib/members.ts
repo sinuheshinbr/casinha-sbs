@@ -10,7 +10,7 @@ export const MEMBERS: MemberInfo[] = [
   { name: "Isadora Souza", email: "isadora.mendespsouza@gmail.com", permissions: [] },
   { name: "Louise Estorani", email: "estoranimendes@gmail.com", permissions: [] },
   { name: "Pedro Duarte", email: "pedrofnd@gmail.com", permissions: [] },
-  { name: "Bob Muterle", email: "", permissions: [] },
+  { name: "Bob Muterle", email: "muterle@ifsp.edu.br", permissions: [] },
   { name: "Rafael Tinti", email: "rafaeltintiogalla@gmail.com", permissions: [] },
   { name: "Sami", email: "sami@electisp.com.br", permissions: [] },
   { name: "Tomás", email: "tomkovensky@gmail.com", permissions: [] },
