@@ -240,11 +240,24 @@ export async function removeParticipant(tripId: string, email: string) {
   if (trip.createdBy === email)
     return { error: "Não é possível remover o criador" };
 
+  const hasSettlements = await db
+    .collection("trip_settlements")
+    .countDocuments({ tripId, $or: [{ from: email }, { to: email }] });
+  if (hasSettlements > 0)
+    return { error: "Não é possível remover: este participante possui acertos registrados" };
+
   await db
     .collection("trips")
     .updateOne(
       { _id: new ObjectId(tripId) },
       { $pull: { participants: email } } as any
+    );
+
+  await db
+    .collection("trip_expenses")
+    .updateMany(
+      { tripId, splitAmong: email },
+      { $pull: { splitAmong: email } } as any
     );
 
   revalidatePath("/split");
