@@ -296,6 +296,12 @@ export function TripDetail({
   }
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
+  const myTotalCost = expenses.reduce((sum, exp) => {
+    if (exp.splitAmong.includes(userEmail)) {
+      return sum + exp.amount / exp.splitAmong.length;
+    }
+    return sum;
+  }, 0);
 
   return (
     <div className="space-y-4">
@@ -310,6 +316,27 @@ export function TripDetail({
         <div className="bg-red-50 text-red-700 text-sm p-2 rounded">
           {error}
         </div>
+      )}
+
+      {myTotalCost > 0 && (
+        <details className="bg-stone-50 rounded-lg shadow">
+          <summary className="p-4 text-center cursor-pointer list-none">
+            <p className="text-xs text-stone-400">Meu custo na viagem</p>
+            <p className="text-lg font-semibold text-stone-800">{currency(myTotalCost)}</p>
+          </summary>
+          <div className="px-4 pb-4 space-y-1 border-t border-stone-200 pt-3">
+            {expenses
+              .filter((exp) => exp.splitAmong.includes(userEmail))
+              .map((exp) => (
+                <div key={exp._id} className="flex items-center justify-between">
+                  <span className="text-sm text-stone-600">{capitalize(exp.description)}</span>
+                  <span className="text-sm font-medium text-stone-700">
+                    {currency(exp.amount / exp.splitAmong.length)}
+                  </span>
+                </div>
+              ))}
+          </div>
+        </details>
       )}
 
       {/* Saldos */}
