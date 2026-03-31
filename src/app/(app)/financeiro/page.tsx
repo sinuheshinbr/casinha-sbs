@@ -136,6 +136,7 @@ export default async function FinanceiroPage({
         expenses={expenses}
         payments={payments}
         income={income}
+        faxinas={faxinas}
         totalExpenses={totalExpenses}
         members={allMembers}
         isAdmin={isAdmin}

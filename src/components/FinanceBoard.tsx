@@ -9,7 +9,7 @@ import {
   addIncome,
   removeIncome,
 } from "@/app/actions-finance";
-import type { Expense, MemberPayment, Income } from "@/app/actions-finance";
+import type { Expense, MemberPayment, Income, Faxina } from "@/app/actions-finance";
 
 interface MemberEntry {
   email: string;
@@ -21,6 +21,7 @@ interface Props {
   expenses: Expense[];
   payments: MemberPayment[];
   income: Income[];
+  faxinas: Faxina[];
   totalExpenses: number;
   members: MemberEntry[];
   isAdmin: boolean;
@@ -54,6 +55,7 @@ export default function FinanceBoard({
   expenses,
   payments,
   income,
+  faxinas,
   totalExpenses,
   members,
   isAdmin,
@@ -74,6 +76,15 @@ export default function FinanceBoard({
   const otherExpenses = expenses.filter((e) => !e.rateio);
   const totalRateio = rateioExpenses.reduce((s, e) => s + e.amount, 0);
   const totalOther = otherExpenses.reduce((s, e) => s + e.amount, 0);
+
+  const totalFaxinaExpense = faxinas.reduce((s, f) => s + f.amount, 0);
+  const totalFaxinaPaid = faxinas.reduce((s, f) => {
+    const perPerson =
+      f.participants.length > 0
+        ? Math.ceil((f.amount / f.participants.length) * 100) / 100
+        : 0;
+    return s + perPerson * f.paidBy.length;
+  }, 0);
   const monthlyContribution =
     members.length > 0
       ? Math.ceil((totalRateio / members.length) * 100) / 100
@@ -123,16 +134,28 @@ export default function FinanceBoard({
               - {currency(totalOther)}
             </span>
           </div>
+          <div className="flex justify-between">
+            <span className="text-stone-500">Faxinas (custo)</span>
+            <span className="text-red-600 font-medium">
+              - {currency(totalFaxinaExpense)}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-stone-500">Faxinas (pagamentos)</span>
+            <span className="text-green-700 font-medium">
+              + {currency(totalFaxinaPaid)}
+            </span>
+          </div>
           <div className="border-t border-stone-200 pt-1.5 flex justify-between font-semibold">
             <span className="text-stone-700">Saldo do mês</span>
             <span
               className={
-                totalPaid + totalIncome - totalExpenses >= 0
+                totalPaid + totalIncome + totalFaxinaPaid - totalExpenses - totalFaxinaExpense >= 0
                   ? "text-green-700"
                   : "text-red-600"
               }
             >
-              {currency(totalPaid + totalIncome - totalExpenses)}
+              {currency(totalPaid + totalIncome + totalFaxinaPaid - totalExpenses - totalFaxinaExpense)}
             </span>
           </div>
         </div>
