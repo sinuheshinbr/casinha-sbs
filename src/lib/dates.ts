@@ -78,3 +78,25 @@ export function formatMonthBR(month: string): string {
   const d = new Date(y, m - 1, 1);
   return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
+
+// Faxina helpers
+
+export function getLastWeekendKey(): string {
+  const now = getSaoPauloNow();
+  const day = now.getDay();
+  const saturday = new Date(now);
+  saturday.setHours(0, 0, 0, 0);
+
+  if (day === 0) {
+    saturday.setDate(now.getDate() - 1);
+  } else if (day !== 6) {
+    saturday.setDate(now.getDate() - (day + 1));
+  }
+
+  return formatDate(saturday);
+}
+
+export function formatWeekendLabel(weekendKey: string): string {
+  const [, m, d] = weekendKey.split("-");
+  return `${d}/${m}`;
+}

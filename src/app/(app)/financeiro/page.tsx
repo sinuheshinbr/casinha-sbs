@@ -7,14 +7,19 @@ import {
   getCurrentMonth,
   shiftMonth,
   formatMonthBR,
+  getLastWeekendKey,
+  formatWeekendLabel,
 } from "@/lib/dates";
 import {
   getExpenses,
   getPayments,
   getIncome,
   getCaixaBalance,
+  getFaxinas,
 } from "@/app/actions-finance";
+import { getReservations } from "@/app/actions";
 import FinanceBoard from "@/components/FinanceBoard";
+import FaxinaBoard from "@/components/FaxinaBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +40,15 @@ export default async function FinanceiroPage({
   const nextMonth = shiftMonth(month, 1);
   const isAdmin = canEditFinance(member.name);
 
-  const [expenses, payments, income, caixaBalance] = await Promise.all([
+  const lastWeekendKey = getLastWeekendKey();
+
+  const [expenses, payments, income, caixaBalance, faxinas, lastWeekendReservations] = await Promise.all([
     getExpenses(month),
     getPayments(month),
     getIncome(month),
     getCaixaBalance(),
+    getFaxinas(month),
+    getReservations(lastWeekendKey),
   ]);
 
   const totalExpenses = expenses.reduce((s, e) => s + e.amount, 0);
@@ -130,6 +139,19 @@ export default async function FinanceiroPage({
         totalExpenses={totalExpenses}
         members={allMembers}
         isAdmin={isAdmin}
+      />
+
+      <FaxinaBoard
+        faxinas={faxinas}
+        month={month}
+        members={allMembers}
+        isAdmin={isAdmin}
+        defaultParticipants={[...new Set(
+          lastWeekendReservations
+            .map((r) => r.memberEmail.toLowerCase())
+            .filter((email) => MEMBERS.some((m) => m.email.toLowerCase() === email))
+        )]}
+        defaultLabel={formatWeekendLabel(lastWeekendKey)}
       />
     </div>
   );

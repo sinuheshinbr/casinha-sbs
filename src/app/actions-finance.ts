@@ -34,6 +34,16 @@ export interface Income {
   visitante: boolean;
 }
 
+export interface Faxina {
+  _id: string;
+  label: string;
+  amount: number;
+  participants: string[];
+  paidBy: string[];
+  month: string;
+  createdAt: string;
+}
+
 // Auth helper
 async function requireFinanceAdmin() {
   const session = await auth();
@@ -198,6 +208,102 @@ export async function removeIncome(id: string) {
 
   const db = getDb();
   await db.collection("income").deleteOne({ _id: new ObjectId(id) });
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+// --- Faxina ---
+
+export async function getFaxinas(month: string): Promise<Faxina[]> {
+  const db = getDb();
+  const docs = await db
+    .collection("faxinas")
+    .find({ month })
+    .sort({ createdAt: -1 })
+    .toArray();
+  return docs.map((doc) => ({
+    _id: doc._id.toString(),
+    label: doc.label as string,
+    amount: doc.amount as number,
+    participants: doc.participants as string[],
+    paidBy: (doc.paidBy as string[]) || [],
+    month: doc.month as string,
+    createdAt: (doc.createdAt as Date).toISOString(),
+  }));
+}
+
+export async function addFaxina(
+  month: string,
+  label: string,
+  amount: number,
+  participants: string[]
+) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+  if (amount <= 0) return { error: "Valor inválido" };
+  if (participants.length === 0) return { error: "Selecione ao menos um morador" };
+
+  const db = getDb();
+  await db.collection("faxinas").insertOne({
+    month,
+    label: label.trim(),
+    amount,
+    participants,
+    paidBy: [],
+    createdAt: new Date(),
+  });
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function removeFaxina(id: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  await db.collection("faxinas").deleteOne({ _id: new ObjectId(id) });
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function markFaxinaPaid(id: string, memberEmail: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  const faxina = await db
+    .collection("faxinas")
+    .findOne({ _id: new ObjectId(id) });
+  if (!faxina) return { error: "Faxina não encontrada" };
+  if (!(faxina.participants as string[]).includes(memberEmail))
+    return { error: "Morador não participa" };
+  if (((faxina.paidBy as string[]) || []).includes(memberEmail))
+    return { error: "Já marcado como pago" };
+
+  await db
+    .collection("faxinas")
+    .updateOne(
+      { _id: new ObjectId(id) },
+      { $push: { paidBy: memberEmail } } as never
+    );
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function unmarkFaxinaPaid(id: string, memberEmail: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  await db
+    .collection("faxinas")
+    .updateOne(
+      { _id: new ObjectId(id) },
+      { $pull: { paidBy: memberEmail } } as never
+    );
+
   revalidatePath("/financeiro");
   return { success: true };
 }
