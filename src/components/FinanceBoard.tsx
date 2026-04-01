@@ -79,11 +79,13 @@ export default function FinanceBoard({
 
   const totalFaxinaExpense = faxinas.reduce((s, f) => s + f.amount, 0);
   const totalFaxinaPaid = faxinas.reduce((s, f) => {
-    const perPerson =
-      f.participants.length > 0
-        ? Math.ceil((f.amount / f.participants.length) * 100) / 100
+    const totalVisits = f.participants.length + (f.extraVisits?.length ?? 0);
+    const perVisit =
+      totalVisits > 0
+        ? Math.ceil((f.amount / totalVisits) * 100) / 100
         : 0;
-    return s + perPerson * f.paidBy.length;
+    const paidCount = f.paidBy.length + (f.extraPaidBy?.length ?? 0);
+    return s + perVisit * paidCount;
   }, 0);
   const monthlyContribution =
     members.length > 0

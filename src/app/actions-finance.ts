@@ -39,7 +39,9 @@ export interface Faxina {
   label: string;
   amount: number;
   participants: string[];
+  extraVisits: string[];
   paidBy: string[];
+  extraPaidBy: string[];
   month: string;
   createdAt: string;
 }
@@ -226,7 +228,9 @@ export async function getFaxinas(month: string): Promise<Faxina[]> {
     label: doc.label as string,
     amount: doc.amount as number,
     participants: doc.participants as string[],
+    extraVisits: (doc.extraVisits as string[]) || [],
     paidBy: (doc.paidBy as string[]) || [],
+    extraPaidBy: (doc.extraPaidBy as string[]) || [],
     month: doc.month as string,
     createdAt: (doc.createdAt as Date).toISOString(),
   }));
@@ -236,12 +240,14 @@ export async function addFaxina(
   month: string,
   label: string,
   amount: number,
-  participants: string[]
+  participants: string[],
+  extraVisits: string[] = []
 ) {
   const admin = await requireFinanceAdmin();
   if (!admin) return { error: "Sem permissão" };
   if (amount <= 0) return { error: "Valor inválido" };
-  if (participants.length === 0) return { error: "Selecione ao menos um morador" };
+  if (participants.length + extraVisits.length === 0)
+    return { error: "Selecione ao menos uma visita" };
 
   const db = getDb();
   await db.collection("faxinas").insertOne({
@@ -249,7 +255,9 @@ export async function addFaxina(
     label: label.trim(),
     amount,
     participants,
+    extraVisits: extraVisits.map((v) => v.trim()).filter(Boolean),
     paidBy: [],
+    extraPaidBy: [],
     createdAt: new Date(),
   });
 
@@ -302,6 +310,47 @@ export async function unmarkFaxinaPaid(id: string, memberEmail: string) {
     .updateOne(
       { _id: new ObjectId(id) },
       { $pull: { paidBy: memberEmail } } as never
+    );
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function markFaxinaExtraPaid(id: string, visitName: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  const faxina = await db
+    .collection("faxinas")
+    .findOne({ _id: new ObjectId(id) });
+  if (!faxina) return { error: "Faxina não encontrada" };
+  if (!(faxina.extraVisits as string[] || []).includes(visitName))
+    return { error: "Visita não participa" };
+  if (((faxina.extraPaidBy as string[]) || []).includes(visitName))
+    return { error: "Já marcado como pago" };
+
+  await db
+    .collection("faxinas")
+    .updateOne(
+      { _id: new ObjectId(id) },
+      { $push: { extraPaidBy: visitName } } as never
+    );
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function unmarkFaxinaExtraPaid(id: string, visitName: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  await db
+    .collection("faxinas")
+    .updateOne(
+      { _id: new ObjectId(id) },
+      { $pull: { extraPaidBy: visitName } } as never
     );
 
   revalidatePath("/financeiro");

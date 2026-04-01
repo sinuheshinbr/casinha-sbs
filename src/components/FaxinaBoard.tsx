@@ -6,6 +6,8 @@ import {
   removeFaxina,
   markFaxinaPaid,
   unmarkFaxinaPaid,
+  markFaxinaExtraPaid,
+  unmarkFaxinaExtraPaid,
 } from "@/app/actions-finance";
 import type { Faxina } from "@/app/actions-finance";
 
@@ -20,6 +22,7 @@ interface Props {
   members: MemberEntry[];
   isAdmin: boolean;
   defaultParticipants: string[];
+  defaultExtraVisits: string[];
   defaultLabel: string;
 }
 
@@ -33,6 +36,7 @@ export default function FaxinaBoard({
   members,
   isAdmin,
   defaultParticipants,
+  defaultExtraVisits,
   defaultLabel,
 }: Props) {
   const [error, setError] = useState("");
@@ -43,6 +47,8 @@ export default function FaxinaBoard({
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(
     new Set(defaultParticipants)
   );
+  const [extraVisits, setExtraVisits] = useState<string[]>(defaultExtraVisits);
+  const [newVisitName, setNewVisitName] = useState("");
 
   function toggleMember(email: string) {
     setSelectedMembers((prev) => {
@@ -53,16 +59,29 @@ export default function FaxinaBoard({
     });
   }
 
+  function addExtraVisit() {
+    const name = newVisitName.trim();
+    if (!name || extraVisits.includes(name)) return;
+    setExtraVisits((prev) => [...prev, name]);
+    setNewVisitName("");
+  }
+
+  function removeExtraVisit(name: string) {
+    setExtraVisits((prev) => prev.filter((v) => v !== name));
+  }
+
   function handleCreate() {
     const val = parseFloat(amount.replace(",", "."));
-    if (!val || val <= 0 || !label.trim() || selectedMembers.size === 0) return;
+    const totalVisits = selectedMembers.size + extraVisits.length;
+    if (!val || val <= 0 || !label.trim() || totalVisits === 0) return;
     setError("");
     startTransition(async () => {
       const r = await addFaxina(
         month,
         label,
         val,
-        Array.from(selectedMembers)
+        Array.from(selectedMembers),
+        extraVisits
       );
       if (r.error) {
         setError(r.error);
@@ -70,6 +89,8 @@ export default function FaxinaBoard({
         setLabel(defaultLabel);
         setAmount("100");
         setSelectedMembers(new Set(defaultParticipants));
+        setExtraVisits(defaultExtraVisits);
+        setNewVisitName("");
         setShowForm(false);
       }
     });
@@ -99,6 +120,22 @@ export default function FaxinaBoard({
     });
   }
 
+  function handleMarkExtraPaid(faxinaId: string, visitName: string) {
+    setError("");
+    startTransition(async () => {
+      const r = await markFaxinaExtraPaid(faxinaId, visitName);
+      if (r.error) setError(r.error);
+    });
+  }
+
+  function handleUnmarkExtraPaid(faxinaId: string, visitName: string) {
+    setError("");
+    startTransition(async () => {
+      const r = await unmarkFaxinaExtraPaid(faxinaId, visitName);
+      if (r.error) setError(r.error);
+    });
+  }
+
   const nameMap = new Map(members.map((m) => [m.email, m.name]));
 
   return (
@@ -118,15 +155,17 @@ export default function FaxinaBoard({
       )}
 
       {faxinas.map((faxina, i) => {
-        const perPerson =
-          faxina.participants.length > 0
-            ? Math.ceil((faxina.amount / faxina.participants.length) * 100) /
-              100
+        const totalVisits =
+          faxina.participants.length + faxina.extraVisits.length;
+        const perVisit =
+          totalVisits > 0
+            ? Math.ceil((faxina.amount / totalVisits) * 100) / 100
             : 0;
         const paidSet = new Set(faxina.paidBy);
-        const paidCount = faxina.paidBy.length;
-        const totalCount = faxina.participants.length;
-        const pendingAmount = (totalCount - paidCount) * perPerson;
+        const extraPaidSet = new Set(faxina.extraPaidBy);
+        const paidCount = faxina.paidBy.length + faxina.extraPaidBy.length;
+
+        const pendingAmount = (totalVisits - paidCount) * perVisit;
 
         return (
           <div key={faxina._id}>
@@ -143,7 +182,7 @@ export default function FaxinaBoard({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-stone-400">
-                  {currency(perPerson)}/pessoa
+                  {currency(perVisit)}/visita
                 </span>
                 {isAdmin && (
                   <button
@@ -183,7 +222,7 @@ export default function FaxinaBoard({
                       {paid ? (
                         <>
                           <span className="text-xs text-green-600 font-medium">
-                            {currency(perPerson)}
+                            {currency(perVisit)}
                           </span>
                           {isAdmin && (
                             <button
@@ -208,7 +247,68 @@ export default function FaxinaBoard({
                         </button>
                       ) : (
                         <span className="text-xs text-amber-600 font-medium">
-                          {currency(perPerson)}
+                          {currency(perVisit)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {faxina.extraVisits.map((visitName) => {
+                const paid = extraPaidSet.has(visitName);
+                return (
+                  <div
+                    key={`extra-${visitName}`}
+                    className="flex items-center justify-between py-0.5"
+                  >
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                          paid ? "bg-green-500" : "bg-stone-300"
+                        }`}
+                      />
+                      <span
+                        className={`text-sm truncate ${
+                          paid ? "text-stone-500" : "text-stone-800"
+                        }`}
+                      >
+                        {visitName}
+                      </span>
+                      <span className="text-xs text-stone-400">(visita)</span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {paid ? (
+                        <>
+                          <span className="text-xs text-green-600 font-medium">
+                            {currency(perVisit)}
+                          </span>
+                          {isAdmin && (
+                            <button
+                              onClick={() =>
+                                handleUnmarkExtraPaid(faxina._id, visitName)
+                              }
+                              disabled={isPending}
+                              className="text-stone-400 hover:text-red-500 text-xs"
+                              title="Desfazer"
+                            >
+                              &times;
+                            </button>
+                          )}
+                        </>
+                      ) : isAdmin ? (
+                        <button
+                          onClick={() =>
+                            handleMarkExtraPaid(faxina._id, visitName)
+                          }
+                          disabled={isPending}
+                          className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded hover:bg-green-200 transition-colors"
+                        >
+                          Marcar pago
+                        </button>
+                      ) : (
+                        <span className="text-xs text-amber-600 font-medium">
+                          {currency(perVisit)}
                         </span>
                       )}
                     </div>
@@ -219,7 +319,7 @@ export default function FaxinaBoard({
 
             <div className="border-t border-stone-100 mt-2 pt-2 flex justify-between text-sm">
               <span className="text-stone-500">
-                {paidCount}/{totalCount} pagaram
+                {paidCount}/{totalVisits} pagaram
               </span>
               {pendingAmount > 0 ? (
                 <span className="text-amber-600 font-medium">
@@ -271,7 +371,7 @@ export default function FaxinaBoard({
           </div>
 
           <div>
-            <p className="text-xs text-stone-500 mb-1.5">Participantes:</p>
+            <p className="text-xs text-stone-500 mb-1.5">Moradores:</p>
             <div className="grid grid-cols-2 gap-1">
               {members.map((m) => (
                 <label
@@ -290,16 +390,62 @@ export default function FaxinaBoard({
             </div>
           </div>
 
-          {selectedMembers.size > 0 && amount && (
+          <div>
+            <p className="text-xs text-stone-500 mb-1.5">Outras visitas:</p>
+            {extraVisits.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {extraVisits.map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 bg-stone-100 text-stone-700 text-sm px-2 py-0.5 rounded-full"
+                  >
+                    {name}
+                    <button
+                      onClick={() => removeExtraVisit(name)}
+                      className="text-stone-400 hover:text-red-500 text-xs font-bold"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div className="flex gap-1.5">
+              <input
+                type="text"
+                value={newVisitName}
+                onChange={(e) => setNewVisitName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addExtraVisit();
+                  }
+                }}
+                placeholder="Nome da visita"
+                className="flex-1 border border-stone-300 rounded-lg px-2 py-1.5 text-sm"
+              />
+              <button
+                type="button"
+                onClick={addExtraVisit}
+                disabled={!newVisitName.trim()}
+                className="text-sm text-green-700 hover:text-green-900 font-bold px-2 disabled:opacity-30"
+              >
+                +
+              </button>
+            </div>
+          </div>
+
+          {(selectedMembers.size + extraVisits.length > 0) && amount && (
             <p className="text-xs text-stone-500">
               {currency(
                 Math.ceil(
                   (parseFloat(amount.replace(",", ".") || "0") /
-                    selectedMembers.size) *
+                    (selectedMembers.size + extraVisits.length)) *
                     100
                 ) / 100
               )}
-              /pessoa
+              /visita ({selectedMembers.size + extraVisits.length} visita
+              {selectedMembers.size + extraVisits.length !== 1 ? "s" : ""})
             </p>
           )}
 
@@ -310,7 +456,7 @@ export default function FaxinaBoard({
                 isPending ||
                 !label.trim() ||
                 !amount ||
-                selectedMembers.size === 0
+                selectedMembers.size + extraVisits.length === 0
               }
               className="bg-green-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-800 disabled:opacity-50 transition-colors"
             >

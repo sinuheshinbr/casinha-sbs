@@ -152,6 +152,11 @@ export default async function FinanceiroPage({
             .map((r) => r.memberEmail.toLowerCase())
             .filter((email) => MEMBERS.some((m) => m.email.toLowerCase() === email))
         )]}
+        defaultExtraVisits={[...new Set(
+          lastWeekendReservations
+            .filter((r) => r.isGuest && r.guestName)
+            .map((r) => r.guestName!)
+        )]}
         defaultLabel={formatWeekendLabel(lastWeekendKey)}
       />
     </div>
