@@ -9,7 +9,13 @@ import {
   addIncome,
   removeIncome,
 } from "@/app/actions-finance";
-import type { Expense, MemberPayment, Income, Faxina } from "@/app/actions-finance";
+import type {
+  Expense,
+  MemberPayment,
+  Income,
+  Faxina,
+  Energia,
+} from "@/app/actions-finance";
 
 interface MemberEntry {
   email: string;
@@ -22,6 +28,7 @@ interface Props {
   payments: MemberPayment[];
   income: Income[];
   faxinas: Faxina[];
+  energias: Energia[];
   totalExpenses: number;
   members: MemberEntry[];
   isAdmin: boolean;
@@ -56,6 +63,7 @@ export default function FinanceBoard({
   payments,
   income,
   faxinas,
+  energias,
   totalExpenses,
   members,
   isAdmin,
@@ -87,6 +95,10 @@ export default function FinanceBoard({
     const paidCount = f.paidBy.length + (f.extraPaidBy?.length ?? 0);
     return s + perVisit * paidCount;
   }, 0);
+  const totalEnergiaPaid = energias.reduce(
+    (s, e) => s + (e.paidAt ? e.amount : 0),
+    0
+  );
   const monthlyContribution =
     members.length > 0
       ? Math.ceil((totalRateio / members.length) * 100) / 100
@@ -148,16 +160,22 @@ export default function FinanceBoard({
               + {currency(totalFaxinaPaid)}
             </span>
           </div>
+          <div className="flex justify-between">
+            <span className="text-stone-500">Energia carros (pagamentos)</span>
+            <span className="text-green-700 font-medium">
+              + {currency(totalEnergiaPaid)}
+            </span>
+          </div>
           <div className="border-t border-stone-200 pt-1.5 flex justify-between font-semibold">
             <span className="text-stone-700">Saldo do mês</span>
             <span
               className={
-                totalPaid + totalIncome + totalFaxinaPaid - totalExpenses - totalFaxinaExpense >= 0
+                totalPaid + totalIncome + totalFaxinaPaid + totalEnergiaPaid - totalExpenses - totalFaxinaExpense >= 0
                   ? "text-green-700"
                   : "text-red-600"
               }
             >
-              {currency(totalPaid + totalIncome + totalFaxinaPaid - totalExpenses - totalFaxinaExpense)}
+              {currency(totalPaid + totalIncome + totalFaxinaPaid + totalEnergiaPaid - totalExpenses - totalFaxinaExpense)}
             </span>
           </div>
         </div>

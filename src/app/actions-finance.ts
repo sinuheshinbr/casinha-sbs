@@ -46,12 +46,33 @@ export interface Faxina {
   createdAt: string;
 }
 
-// Auth helper
+export interface Energia {
+  _id: string;
+  month: string;
+  memberEmail: string;
+  kwh: number;
+  tariff: number;
+  amount: number;
+  note: string;
+  paidAt: string | null;
+  paidBy: string | null;
+  createdAt: string;
+}
+
+// Auth helpers
 async function requireFinanceAdmin() {
   const session = await auth();
   if (!session?.user?.email) return null;
   const member = getMemberByEmail(session.user.email);
   if (!member || !canEditFinance(member.name)) return null;
+  return member;
+}
+
+async function requireMember() {
+  const session = await auth();
+  if (!session?.user?.email) return null;
+  const member = getMemberByEmail(session.user.email);
+  if (!member) return null;
   return member;
 }
 
@@ -357,12 +378,133 @@ export async function unmarkFaxinaExtraPaid(id: string, visitName: string) {
   return { success: true };
 }
 
+// --- Energia (carros elétricos) ---
+
+export async function getEnergias(month: string): Promise<Energia[]> {
+  const db = getDb();
+  const docs = await db
+    .collection("energias")
+    .find({ month })
+    .sort({ createdAt: -1 })
+    .toArray();
+  return docs.map((doc) => ({
+    _id: doc._id.toString(),
+    month: doc.month as string,
+    memberEmail: doc.memberEmail as string,
+    kwh: doc.kwh as number,
+    tariff: doc.tariff as number,
+    amount: doc.amount as number,
+    note: (doc.note as string) ?? "",
+    paidAt: doc.paidAt ? (doc.paidAt as Date).toISOString() : null,
+    paidBy: (doc.paidBy as string | null) ?? null,
+    createdAt: (doc.createdAt as Date).toISOString(),
+  }));
+}
+
+export async function getLastEnergiaTariff(): Promise<number> {
+  const db = getDb();
+  const doc = await db
+    .collection("energias")
+    .find()
+    .sort({ createdAt: -1 })
+    .limit(1)
+    .next();
+  return (doc?.tariff as number) ?? 0;
+}
+
+export async function addEnergia(
+  month: string,
+  kwh: number,
+  tariff: number,
+  note: string = ""
+) {
+  const member = await requireMember();
+  if (!member) return { error: "Sem permissão" };
+  if (kwh <= 0) return { error: "kWh inválido" };
+  if (tariff <= 0) return { error: "Tarifa inválida" };
+
+  const amount = Math.round(kwh * tariff * 100) / 100;
+
+  const db = getDb();
+  await db.collection("energias").insertOne({
+    month,
+    memberEmail: member.email.toLowerCase(),
+    kwh,
+    tariff,
+    amount,
+    note: note.trim(),
+    paidAt: null,
+    paidBy: null,
+    createdAt: new Date(),
+  });
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function markEnergiaPaid(id: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  const result = await db.collection("energias").updateOne(
+    { _id: new ObjectId(id), paidAt: null },
+    { $set: { paidAt: new Date(), paidBy: admin.email.toLowerCase() } }
+  );
+  if (result.matchedCount === 0)
+    return { error: "Não encontrada ou já paga" };
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function unmarkEnergiaPaid(id: string) {
+  const admin = await requireFinanceAdmin();
+  if (!admin) return { error: "Sem permissão" };
+
+  const db = getDb();
+  await db
+    .collection("energias")
+    .updateOne(
+      { _id: new ObjectId(id) },
+      { $set: { paidAt: null, paidBy: null } }
+    );
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
+export async function removeEnergia(id: string) {
+  const member = await requireMember();
+  if (!member) return { error: "Sem permissão" };
+
+  const db = getDb();
+  const energia = await db
+    .collection("energias")
+    .findOne({ _id: new ObjectId(id) });
+  if (!energia) return { error: "Não encontrada" };
+
+  const isAdmin = canEditFinance(member.name);
+  const isOwner =
+    (energia.memberEmail as string) === member.email.toLowerCase();
+  const isPaid = !!energia.paidAt;
+
+  if (!isAdmin && !isOwner) return { error: "Sem permissão" };
+  if (!isAdmin && isPaid)
+    return { error: "Não pode remover entrada já paga" };
+
+  await db.collection("energias").deleteOne({ _id: new ObjectId(id) });
+
+  revalidatePath("/financeiro");
+  return { success: true };
+}
+
 // --- Caixa Balance ---
 
 export async function getCaixaBalance(): Promise<number> {
   const db = getDb();
 
-  const [expenseSum, paymentSum, incomeSum] = await Promise.all([
+  const [expenseSum, paymentSum, incomeSum, energiaPaidSum] = await Promise.all([
     db
       .collection("expenses")
       .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
@@ -375,11 +517,19 @@ export async function getCaixaBalance(): Promise<number> {
       .collection("income")
       .aggregate([{ $group: { _id: null, total: { $sum: "$amount" } } }])
       .toArray(),
+    db
+      .collection("energias")
+      .aggregate([
+        { $match: { paidAt: { $ne: null } } },
+        { $group: { _id: null, total: { $sum: "$amount" } } },
+      ])
+      .toArray(),
   ]);
 
   const expenses = expenseSum[0]?.total ?? 0;
   const payments = paymentSum[0]?.total ?? 0;
   const income = incomeSum[0]?.total ?? 0;
+  const energiaPaid = energiaPaidSum[0]?.total ?? 0;
 
-  return payments + income - expenses;
+  return payments + income + energiaPaid - expenses;
 }

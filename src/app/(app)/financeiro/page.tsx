@@ -16,10 +16,13 @@ import {
   getIncome,
   getCaixaBalance,
   getFaxinas,
+  getEnergias,
+  getLastEnergiaTariff,
 } from "@/app/actions-finance";
 import { getReservations } from "@/app/actions";
 import FinanceBoard from "@/components/FinanceBoard";
 import FaxinaBoard from "@/components/FaxinaBoard";
+import EnergiaBoard from "@/components/EnergiaBoard";
 
 export const dynamic = "force-dynamic";
 
@@ -42,12 +45,23 @@ export default async function FinanceiroPage({
 
   const lastWeekendKey = getLastWeekendKey();
 
-  const [expenses, payments, income, caixaBalance, faxinas, lastWeekendReservations] = await Promise.all([
+  const [
+    expenses,
+    payments,
+    income,
+    caixaBalance,
+    faxinas,
+    energias,
+    lastEnergiaTariff,
+    lastWeekendReservations,
+  ] = await Promise.all([
     getExpenses(month),
     getPayments(month),
     getIncome(month),
     getCaixaBalance(),
     getFaxinas(month),
+    getEnergias(month),
+    getLastEnergiaTariff(),
     getReservations(lastWeekendKey),
   ]);
 
@@ -137,6 +151,7 @@ export default async function FinanceiroPage({
         payments={payments}
         income={income}
         faxinas={faxinas}
+        energias={energias}
         totalExpenses={totalExpenses}
         members={allMembers}
         isAdmin={isAdmin}
@@ -158,6 +173,15 @@ export default async function FinanceiroPage({
             .map((r) => r.guestName!)
         )]}
         defaultLabel={formatWeekendLabel(lastWeekendKey)}
+      />
+
+      <EnergiaBoard
+        energias={energias}
+        month={month}
+        members={allMembers}
+        isAdmin={isAdmin}
+        currentUserEmail={session.user.email.toLowerCase()}
+        defaultTariff={lastEnergiaTariff}
       />
     </div>
   );
