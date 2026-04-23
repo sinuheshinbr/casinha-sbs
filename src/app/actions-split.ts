@@ -34,6 +34,7 @@ export interface TripExpense {
   description: string;
   amount: number;
   paidBy: string;
+  splitAmongAll: boolean;
   splitAmong: string[];
   createdAt: string;
 }
@@ -214,12 +215,14 @@ export async function addParticipant(
     );
 
   if (addToAllExpenses) {
-    // Add to expenses that were split among all current participants
+    // Add to fixed-snapshot expenses that included all current participants.
+    // Expenses with splitAmongAll=true already include the new member via trip.participants.
     const expenses = await db
       .collection("trip_expenses")
       .find({ tripId })
       .toArray();
     for (const exp of expenses) {
+      if (exp.splitAmongAll === true) continue;
       const split = (exp.splitAmong as string[]) ?? [];
       const isAll =
         split.length === participants.length &&
@@ -277,6 +280,33 @@ export async function removeParticipant(tripId: string, email: string) {
   return { success: true };
 }
 
+export async function joinTrip(tripId: string) {
+  const user = await requireUser();
+  if (!user) return { error: "Faça login" };
+
+  let objectId: ObjectId;
+  try {
+    objectId = new ObjectId(tripId);
+  } catch {
+    return { error: "Link inválido" };
+  }
+
+  const db = getDb();
+  const trip = await db.collection("trips").findOne({ _id: objectId });
+  if (!trip) return { error: "Viagem não encontrada" };
+
+  const participants = trip.participants as string[];
+  if (participants.includes(user.email)) {
+    return { success: true, alreadyMember: true };
+  }
+
+  await db
+    .collection<TripDoc>("trips")
+    .updateOne({ _id: objectId }, { $push: { participants: user.email } });
+
+  return { success: true };
+}
+
 // --- Trip Expenses ---
 
 export async function getTripExpenses(tripId: string): Promise<TripExpense[]> {
@@ -297,15 +327,22 @@ export async function getTripExpenses(tripId: string): Promise<TripExpense[]> {
     .sort({ createdAt: -1 })
     .toArray();
 
-  return docs.map((doc) => ({
-    _id: doc._id.toString(),
-    tripId: doc.tripId as string,
-    description: doc.description as string,
-    amount: doc.amount as number,
-    paidBy: doc.paidBy as string,
-    splitAmong: (doc.splitAmong as string[]) ?? (trip.participants as string[]),
-    createdAt: (doc.createdAt as Date).toISOString(),
-  }));
+  return docs.map((doc) => {
+    const splitAmongAll = doc.splitAmongAll === true;
+    const splitAmong = splitAmongAll
+      ? (trip.participants as string[])
+      : ((doc.splitAmong as string[]) ?? (trip.participants as string[]));
+    return {
+      _id: doc._id.toString(),
+      tripId: doc.tripId as string,
+      description: doc.description as string,
+      amount: doc.amount as number,
+      paidBy: doc.paidBy as string,
+      splitAmongAll,
+      splitAmong,
+      createdAt: (doc.createdAt as Date).toISOString(),
+    };
+  });
 }
 
 export async function addTripExpense(
@@ -313,13 +350,15 @@ export async function addTripExpense(
   description: string,
   amount: number,
   splitAmong: string[],
-  paidBy?: string
+  paidBy?: string,
+  splitAmongAll: boolean = false
 ) {
   const user = await requireUser();
   if (!user) return { error: "Faça login" };
   if (!description.trim()) return { error: "Descrição obrigatória" };
   if (amount <= 0) return { error: "Valor inválido" };
-  if (splitAmong.length === 0) return { error: "Selecione ao menos um participante" };
+  if (!splitAmongAll && splitAmong.length === 0)
+    return { error: "Selecione ao menos um participante" };
 
   const db = getDb();
   const trip = await db
@@ -330,6 +369,13 @@ export async function addTripExpense(
   if (!participants.includes(user.email))
     return { error: "Sem permissão" };
 
+  if (!splitAmongAll) {
+    for (const p of splitAmong) {
+      if (!participants.includes(p))
+        return { error: "Participante inválido" };
+    }
+  }
+
   const payer = paidBy && participants.includes(paidBy) ? paidBy : user.email;
 
   await db.collection("trip_expenses").insertOne({
@@ -337,7 +383,8 @@ export async function addTripExpense(
     description: description.trim(),
     amount,
     paidBy: payer,
-    splitAmong,
+    splitAmongAll,
+    splitAmong: splitAmongAll ? [] : splitAmong,
     createdAt: new Date(),
   });
 
@@ -350,13 +397,15 @@ export async function updateTripExpense(
   description: string,
   amount: number,
   splitAmong: string[],
-  paidBy?: string
+  paidBy?: string,
+  splitAmongAll: boolean = false
 ) {
   const user = await requireUser();
   if (!user) return { error: "Faça login" };
   if (!description.trim()) return { error: "Descrição obrigatória" };
   if (amount <= 0) return { error: "Valor inválido" };
-  if (splitAmong.length === 0) return { error: "Selecione ao menos um participante" };
+  if (!splitAmongAll && splitAmong.length === 0)
+    return { error: "Selecione ao menos um participante" };
 
   const db = getDb();
   const exp = await db
@@ -372,9 +421,11 @@ export async function updateTripExpense(
   if (!participants.includes(user.email))
     return { error: "Sem permissão" };
 
-  for (const p of splitAmong) {
-    if (!participants.includes(p))
-      return { error: "Participante inválido" };
+  if (!splitAmongAll) {
+    for (const p of splitAmong) {
+      if (!participants.includes(p))
+        return { error: "Participante inválido" };
+    }
   }
 
   const payer =
@@ -386,7 +437,8 @@ export async function updateTripExpense(
       $set: {
         description: description.trim(),
         amount,
-        splitAmong,
+        splitAmongAll,
+        splitAmong: splitAmongAll ? [] : splitAmong,
         paidBy: payer,
       },
     }
@@ -443,7 +495,10 @@ export async function getTripBalances(tripId: string): Promise<Balance[]> {
   for (const exp of expenses) {
     const amount = exp.amount as number;
     const payer = exp.paidBy as string;
-    const split = (exp.splitAmong as string[] | undefined) ?? participants;
+    const splitAmongAll = exp.splitAmongAll === true;
+    const split = splitAmongAll
+      ? participants
+      : ((exp.splitAmong as string[] | undefined) ?? participants);
     const share = amount / split.length;
 
     paid.set(payer, (paid.get(payer) ?? 0) + amount);

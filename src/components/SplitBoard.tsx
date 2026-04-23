@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { capitalize } from "@/lib/capitalize";
+
+const subscribeLocation = () => () => {};
+const getLocationOrigin = () => window.location.origin;
+const getServerLocationOrigin = () => "";
 import {
   createTrip,
   deleteTrip,
@@ -103,6 +107,7 @@ interface ExpenseFormValues {
   description: string;
   amount: number;
   paidBy: string;
+  splitAmongAll: boolean;
   splitAmong: string[];
 }
 
@@ -123,6 +128,7 @@ function ExpenseForm({
     description: string;
     amount: number;
     paidBy: string;
+    splitAmongAll: boolean;
     splitAmong: string[];
   };
   submitLabel: string;
@@ -131,14 +137,21 @@ function ExpenseForm({
   isPending: boolean;
 }) {
   const initialSplit = initial?.splitAmong ?? trip.participants;
-  const initialIsAll =
+  const matchesAllCurrent =
     initialSplit.length === trip.participants.length &&
     trip.participants.every((p) => initialSplit.includes(p));
+  const initialSplitAll = initial
+    ? initial.splitAmongAll || matchesAllCurrent
+    : true;
+  const initialIncludeFuture = initial
+    ? initial.splitAmongAll === true
+    : true;
 
   const [description, setDescription] = useState(initial?.description ?? "");
   const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
   const [paidBy, setPaidBy] = useState(initial?.paidBy ?? userEmail);
-  const [splitAll, setSplitAll] = useState(initial ? initialIsAll : true);
+  const [splitAll, setSplitAll] = useState(initialSplitAll);
+  const [includeFuture, setIncludeFuture] = useState(initialIncludeFuture);
   const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
     new Set(initialSplit)
   );
@@ -155,13 +168,24 @@ function ExpenseForm({
   function handleSubmit() {
     const val = parseFloat(amount.replace(",", "."));
     if (!description.trim() || !val || val <= 0) return;
-    const split = splitAll ? trip.participants : [...selectedParticipants];
-    if (split.length === 0) return;
+
+    let splitAmongAll: boolean;
+    let splitAmong: string[];
+    if (splitAll) {
+      splitAmongAll = includeFuture;
+      splitAmong = includeFuture ? [] : trip.participants;
+    } else {
+      splitAmongAll = false;
+      splitAmong = [...selectedParticipants];
+      if (splitAmong.length === 0) return;
+    }
+
     onSubmit({
       description: description.trim(),
       amount: val,
       paidBy,
-      splitAmong: split,
+      splitAmongAll,
+      splitAmong,
     });
   }
 
@@ -212,7 +236,17 @@ function ExpenseForm({
           />
           Dividir igualmente entre todos
         </label>
-        {!splitAll && (
+        {splitAll ? (
+          <label className="flex items-center gap-2 text-sm text-stone-600 pl-5">
+            <input
+              type="checkbox"
+              checked={includeFuture}
+              onChange={(e) => setIncludeFuture(e.target.checked)}
+              className="rounded border-stone-300"
+            />
+            Incluir novos participantes automaticamente
+          </label>
+        ) : (
           <div className="pl-1 space-y-1 mt-1">
             {trip.participants.map((email) => (
               <label
@@ -419,7 +453,8 @@ export function TripDetail({
         values.description,
         values.amount,
         values.splitAmong,
-        values.paidBy
+        values.paidBy,
+        values.splitAmongAll
       );
       if (r.error) setError(r.error);
       else setShowForm(false);
@@ -434,7 +469,8 @@ export function TripDetail({
         values.description,
         values.amount,
         values.splitAmong,
-        values.paidBy
+        values.paidBy,
+        values.splitAmongAll
       );
       if (r.error) setError(r.error);
       else setEditingId(null);
@@ -580,6 +616,7 @@ export function TripDetail({
                       description: exp.description,
                       amount: exp.amount,
                       paidBy: exp.paidBy,
+                      splitAmongAll: exp.splitAmongAll,
                       splitAmong: exp.splitAmong,
                     }}
                     submitLabel="Salvar"
@@ -836,11 +873,18 @@ function ParticipantsSection({
   setError: (e: string) => void;
 }) {
   const [newEmail, setNewEmail] = useState("");
+  const [copyLabel, setCopyLabel] = useState("Copiar link");
+  const origin = useSyncExternalStore(
+    subscribeLocation,
+    getLocationOrigin,
+    getServerLocationOrigin
+  );
+  const inviteUrl = origin ? `${origin}/split/join/${trip._id}` : "";
 
   function handleAdd() {
     if (!newEmail.trim()) return;
     const addToAll = confirm(
-      "Deseja adicionar esta pessoa a todas as despesas que foram divididas igualmente entre todos?"
+      "Adicionar esta pessoa também às despesas anteriores divididas entre todos?"
     );
     setError("");
     startTransition(async () => {
@@ -856,6 +900,13 @@ function ParticipantsSection({
       const r = await removeParticipant(trip._id, email);
       if (r.error) setError(r.error);
     });
+  }
+
+  function handleCopy() {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl);
+    setCopyLabel("Copiado!");
+    setTimeout(() => setCopyLabel("Copiar link"), 2000);
   }
 
   return (
@@ -900,6 +951,27 @@ function ParticipantsSection({
         >
           Adicionar
         </button>
+      </div>
+      <div className="border-t border-stone-200 pt-3 mt-3">
+        <p className="text-xs text-stone-500 mb-2">
+          Ou envie o link abaixo. Qualquer pessoa logada que acessar entra na viagem.
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={inviteUrl}
+            readOnly
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 border border-stone-300 rounded-lg px-3 py-1.5 text-xs font-mono text-stone-600 bg-stone-50"
+          />
+          <button
+            onClick={handleCopy}
+            disabled={!inviteUrl}
+            className="text-sm text-green-700 hover:text-green-900 font-medium px-2 whitespace-nowrap disabled:opacity-50"
+          >
+            {copyLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
