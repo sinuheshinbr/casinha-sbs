@@ -303,6 +303,10 @@ export function TripDetail({
     return sum;
   }, 0);
 
+  const myBalance = balances.find((b) => b.email === userEmail);
+  const showPixWarning =
+    !!myBalance && myBalance.net > 0.01 && !myBalance.pixKey;
+
   return (
     <div className="space-y-4">
       <a
@@ -315,6 +319,19 @@ export function TripDetail({
       {error && (
         <div className="bg-red-50 text-red-700 text-sm p-2 rounded">
           {error}
+        </div>
+      )}
+
+      {showPixWarning && (
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-sm p-3 rounded-lg">
+          Você tem valores a receber, mas ainda não cadastrou uma chave PIX.{" "}
+          <a
+            href="/perfil"
+            className="underline font-medium hover:text-yellow-900"
+          >
+            Cadastre no seu perfil
+          </a>{" "}
+          para que os outros vejam a chave e possam te pagar.
         </div>
       )}
 
