@@ -5,6 +5,19 @@ import { revalidatePath } from "next/cache";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 
+// MongoDB document shapes (used to type $push/$pull operations)
+
+interface TripDoc {
+  _id: ObjectId;
+  participants: string[];
+}
+
+interface TripExpenseDoc {
+  _id: ObjectId;
+  tripId: string;
+  splitAmong: string[];
+}
+
 // Types
 
 export interface Trip {
@@ -194,10 +207,10 @@ export async function addParticipant(
     return { error: "Já participa" };
 
   await db
-    .collection("trips")
+    .collection<TripDoc>("trips")
     .updateOne(
       { _id: new ObjectId(tripId) },
-      { $push: { participants: normalized } } as any
+      { $push: { participants: normalized } }
     );
 
   if (addToAllExpenses) {
@@ -213,10 +226,10 @@ export async function addParticipant(
         participants.every((p) => split.includes(p));
       if (isAll) {
         await db
-          .collection("trip_expenses")
+          .collection<TripExpenseDoc>("trip_expenses")
           .updateOne(
             { _id: exp._id },
-            { $push: { splitAmong: normalized } } as any
+            { $push: { splitAmong: normalized } }
           );
       }
     }
@@ -247,17 +260,17 @@ export async function removeParticipant(tripId: string, email: string) {
     return { error: "Não é possível remover: este participante possui acertos registrados" };
 
   await db
-    .collection("trips")
+    .collection<TripDoc>("trips")
     .updateOne(
       { _id: new ObjectId(tripId) },
-      { $pull: { participants: email } } as any
+      { $pull: { participants: email } }
     );
 
   await db
-    .collection("trip_expenses")
+    .collection<TripExpenseDoc>("trip_expenses")
     .updateMany(
       { tripId, splitAmong: email },
-      { $pull: { splitAmong: email } } as any
+      { $pull: { splitAmong: email } }
     );
 
   revalidatePath("/split");
@@ -327,6 +340,57 @@ export async function addTripExpense(
     splitAmong,
     createdAt: new Date(),
   });
+
+  revalidatePath("/split");
+  return { success: true };
+}
+
+export async function updateTripExpense(
+  id: string,
+  description: string,
+  amount: number,
+  splitAmong: string[],
+  paidBy?: string
+) {
+  const user = await requireUser();
+  if (!user) return { error: "Faça login" };
+  if (!description.trim()) return { error: "Descrição obrigatória" };
+  if (amount <= 0) return { error: "Valor inválido" };
+  if (splitAmong.length === 0) return { error: "Selecione ao menos um participante" };
+
+  const db = getDb();
+  const exp = await db
+    .collection("trip_expenses")
+    .findOne({ _id: new ObjectId(id) });
+  if (!exp) return { error: "Despesa não encontrada" };
+
+  const trip = await db
+    .collection("trips")
+    .findOne({ _id: new ObjectId(exp.tripId as string) });
+  if (!trip) return { error: "Viagem não encontrada" };
+  const participants = trip.participants as string[];
+  if (!participants.includes(user.email))
+    return { error: "Sem permissão" };
+
+  for (const p of splitAmong) {
+    if (!participants.includes(p))
+      return { error: "Participante inválido" };
+  }
+
+  const payer =
+    paidBy && participants.includes(paidBy) ? paidBy : (exp.paidBy as string);
+
+  await db.collection("trip_expenses").updateOne(
+    { _id: new ObjectId(id) },
+    {
+      $set: {
+        description: description.trim(),
+        amount,
+        splitAmong,
+        paidBy: payer,
+      },
+    }
+  );
 
   revalidatePath("/split");
   return { success: true };

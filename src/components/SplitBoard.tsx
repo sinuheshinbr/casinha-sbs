@@ -1,11 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { capitalize } from "@/lib/capitalize";
 import {
   createTrip,
   deleteTrip,
   addTripExpense,
+  updateTripExpense,
   removeTripExpense,
   addParticipant,
   removeParticipant,
@@ -69,7 +71,7 @@ function formatPixDisplay(value: string): string {
 function Avatar({ name, image, size = 24 }: { name: string; image: string | null; size?: number }) {
   if (image) {
     return (
-      <img
+      <Image
         src={image}
         alt={name}
         width={size}
@@ -91,6 +93,164 @@ function Avatar({ name, image, size = 24 }: { name: string; image: string | null
       style={{ width: size, height: size, fontSize: size * 0.4 }}
     >
       {initials}
+    </div>
+  );
+}
+
+// --- Expense Form ---
+
+interface ExpenseFormValues {
+  description: string;
+  amount: number;
+  paidBy: string;
+  splitAmong: string[];
+}
+
+function ExpenseForm({
+  trip,
+  nameMap,
+  userEmail,
+  initial,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  trip: Trip;
+  nameMap: Map<string, string>;
+  userEmail: string;
+  initial?: {
+    description: string;
+    amount: number;
+    paidBy: string;
+    splitAmong: string[];
+  };
+  submitLabel: string;
+  onSubmit: (values: ExpenseFormValues) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const initialSplit = initial?.splitAmong ?? trip.participants;
+  const initialIsAll =
+    initialSplit.length === trip.participants.length &&
+    trip.participants.every((p) => initialSplit.includes(p));
+
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [amount, setAmount] = useState(initial ? String(initial.amount) : "");
+  const [paidBy, setPaidBy] = useState(initial?.paidBy ?? userEmail);
+  const [splitAll, setSplitAll] = useState(initial ? initialIsAll : true);
+  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
+    new Set(initialSplit)
+  );
+
+  function toggleParticipant(email: string) {
+    setSelectedParticipants((prev) => {
+      const next = new Set(prev);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
+      return next;
+    });
+  }
+
+  function handleSubmit() {
+    const val = parseFloat(amount.replace(",", "."));
+    if (!description.trim() || !val || val <= 0) return;
+    const split = splitAll ? trip.participants : [...selectedParticipants];
+    if (split.length === 0) return;
+    onSubmit({
+      description: description.trim(),
+      amount: val,
+      paidBy,
+      splitAmong: split,
+    });
+  }
+
+  return (
+    <div className="space-y-2">
+      <input
+        type="text"
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Descrição"
+        className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
+      />
+      <div className="flex gap-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder="Valor (R$)"
+          className="flex-1 border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
+        />
+        <span className="text-xs text-stone-500 self-center whitespace-nowrap">
+          Pago por:
+        </span>
+        <select
+          value={paidBy}
+          onChange={(e) => setPaidBy(e.target.value)}
+          className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+        >
+          {trip.participants.map((email) => (
+            <option key={email} value={email}>
+              {nameMap.get(email) ?? email}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm text-stone-700">
+          <input
+            type="checkbox"
+            checked={splitAll}
+            onChange={(e) => {
+              setSplitAll(e.target.checked);
+              if (e.target.checked)
+                setSelectedParticipants(new Set(trip.participants));
+            }}
+            className="rounded border-stone-300"
+          />
+          Dividir igualmente entre todos
+        </label>
+        {!splitAll && (
+          <div className="pl-1 space-y-1 mt-1">
+            {trip.participants.map((email) => (
+              <label
+                key={email}
+                className="flex items-center gap-2 text-sm text-stone-600"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedParticipants.has(email)}
+                  onChange={() => toggleParticipant(email)}
+                  className="rounded border-stone-300"
+                />
+                {nameMap.get(email) ?? email}
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={handleSubmit}
+          disabled={
+            isPending ||
+            !description.trim() ||
+            !amount ||
+            (!splitAll && selectedParticipants.size === 0)
+          }
+          className="bg-green-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-800 disabled:opacity-50 transition-colors"
+        >
+          {submitLabel}
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-stone-400 hover:text-stone-600 text-sm px-2"
+        >
+          Cancelar
+        </button>
+      </div>
     </div>
   );
 }
@@ -247,43 +407,37 @@ export function TripDetail({
   const [error, setError] = useState("");
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
-  const [description, setDescription] = useState("");
-  const [amount, setAmount] = useState("");
-  const [paidBy, setPaidBy] = useState(userEmail);
-  const [splitAll, setSplitAll] = useState(true);
-  const [selectedParticipants, setSelectedParticipants] = useState<Set<string>>(
-    new Set(trip.participants)
-  );
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const nameMap = new Map(balances.map((b) => [b.email, b.name]));
 
-  function toggleParticipant(email: string) {
-    setSelectedParticipants((prev) => {
-      const next = new Set(prev);
-      if (next.has(email)) next.delete(email);
-      else next.add(email);
-      return next;
+  function handleAdd(values: ExpenseFormValues) {
+    setError("");
+    startTransition(async () => {
+      const r = await addTripExpense(
+        trip._id,
+        values.description,
+        values.amount,
+        values.splitAmong,
+        values.paidBy
+      );
+      if (r.error) setError(r.error);
+      else setShowForm(false);
     });
   }
 
-  function handleAdd() {
-    const val = parseFloat(amount.replace(",", "."));
-    if (!description.trim() || !val || val <= 0) return;
-    const split = splitAll ? trip.participants : [...selectedParticipants];
-    if (split.length === 0) return;
+  function handleUpdate(id: string, values: ExpenseFormValues) {
     setError("");
     startTransition(async () => {
-      const r = await addTripExpense(trip._id, description, val, split, paidBy);
-      if (r.error) {
-        setError(r.error);
-      } else {
-        setDescription("");
-        setAmount("");
-        setPaidBy(userEmail);
-        setSplitAll(true);
-        setSelectedParticipants(new Set(trip.participants));
-        setShowForm(false);
-      }
+      const r = await updateTripExpense(
+        id,
+        values.description,
+        values.amount,
+        values.splitAmong,
+        values.paidBy
+      );
+      if (r.error) setError(r.error);
+      else setEditingId(null);
     });
   }
 
@@ -413,37 +567,71 @@ export function TripDetail({
 
         {expenses.map((exp) => {
           const isPartial = exp.splitAmong.length < trip.participants.length;
+          const isEditing = editingId === exp._id;
           return (
             <div key={exp._id} className="py-1.5">
-              <div className="flex items-center justify-between">
-                <div className="min-w-0 flex-1">
-                  <span className="text-sm text-stone-800">
-                    {capitalize(exp.description)}
-                  </span>
-                  <span className="text-xs text-stone-400 ml-2">
-                    {nameMap.get(exp.paidBy) ?? exp.paidBy}
-                  </span>
+              {isEditing ? (
+                <div className="border border-stone-200 rounded-lg p-3 bg-stone-50">
+                  <ExpenseForm
+                    trip={trip}
+                    nameMap={nameMap}
+                    userEmail={userEmail}
+                    initial={{
+                      description: exp.description,
+                      amount: exp.amount,
+                      paidBy: exp.paidBy,
+                      splitAmong: exp.splitAmong,
+                    }}
+                    submitLabel="Salvar"
+                    onSubmit={(values) => handleUpdate(exp._id, values)}
+                    onCancel={() => setEditingId(null)}
+                    isPending={isPending}
+                  />
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm font-medium text-stone-700">
-                    {currency(exp.amount)}
-                  </span>
-                  <button
-                      onClick={() => handleRemove(exp._id)}
-                      disabled={isPending}
-                      className="text-stone-400 hover:text-red-500 text-lg font-bold px-1"
-                    >
-                      &times;
-                    </button>
-                </div>
-              </div>
-              {isPartial && (
-                <p className="text-xs text-stone-400 mt-0.5">
-                  Dividido entre:{" "}
-                  {exp.splitAmong
-                    .map((e) => nameMap.get(e) ?? e)
-                    .join(", ")}
-                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <span className="text-sm text-stone-800">
+                        {capitalize(exp.description)}
+                      </span>
+                      <span className="text-xs text-stone-400 ml-2">
+                        {nameMap.get(exp.paidBy) ?? exp.paidBy}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-sm font-medium text-stone-700">
+                        {currency(exp.amount)}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setEditingId(exp._id);
+                          setShowForm(false);
+                        }}
+                        disabled={isPending}
+                        className="text-stone-400 hover:text-green-700 text-sm px-1"
+                        title="Editar"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        onClick={() => handleRemove(exp._id)}
+                        disabled={isPending}
+                        className="text-stone-400 hover:text-red-500 text-lg font-bold px-1"
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                  {isPartial && (
+                    <p className="text-xs text-stone-400 mt-0.5">
+                      Dividido entre:{" "}
+                      {exp.splitAmong
+                        .map((e) => nameMap.get(e) ?? e)
+                        .join(", ")}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           );
@@ -451,99 +639,25 @@ export function TripDetail({
 
         {!showForm ? (
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              setShowForm(true);
+              setEditingId(null);
+            }}
             className="text-sm text-green-700 hover:text-green-900 font-medium mt-3"
           >
             + Adicionar despesa
           </button>
         ) : (
-          <div className="border-t border-stone-200 pt-3 mt-3 space-y-2">
-            <input
-              type="text"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Descrição"
-              className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
+          <div className="border-t border-stone-200 pt-3 mt-3">
+            <ExpenseForm
+              trip={trip}
+              nameMap={nameMap}
+              userEmail={userEmail}
+              submitLabel="Adicionar"
+              onSubmit={handleAdd}
+              onCancel={() => setShowForm(false)}
+              isPending={isPending}
             />
-            <div className="flex gap-2">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                placeholder="Valor (R$)"
-                className="flex-1 border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
-              />
-              <span className="text-xs text-stone-500 self-center whitespace-nowrap">Pago por:</span>
-              <select
-                value={paidBy}
-                onChange={(e) => setPaidBy(e.target.value)}
-                className="border border-stone-300 rounded-lg px-2 py-1.5 text-sm bg-white"
-              >
-                {trip.participants.map((email) => (
-                  <option key={email} value={email}>
-                    {nameMap.get(email) ?? email}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="flex items-center gap-2 text-sm text-stone-700">
-                <input
-                  type="checkbox"
-                  checked={splitAll}
-                  onChange={(e) => {
-                    setSplitAll(e.target.checked);
-                    if (e.target.checked)
-                      setSelectedParticipants(new Set(trip.participants));
-                  }}
-                  className="rounded border-stone-300"
-                />
-                Dividir igualmente entre todos
-              </label>
-              {!splitAll && (
-                <div className="pl-1 space-y-1 mt-1">
-                  {trip.participants.map((email) => (
-                    <label
-                      key={email}
-                      className="flex items-center gap-2 text-sm text-stone-600"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedParticipants.has(email)}
-                        onChange={() => toggleParticipant(email)}
-                        className="rounded border-stone-300"
-                      />
-                      {nameMap.get(email) ?? email}
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleAdd}
-                disabled={
-                  isPending ||
-                  !description.trim() ||
-                  !amount ||
-                  (!splitAll && selectedParticipants.size === 0)
-                }
-                className="bg-green-700 text-white rounded-lg px-4 py-1.5 text-sm font-medium hover:bg-green-800 disabled:opacity-50 transition-colors"
-              >
-                Adicionar
-              </button>
-              <button
-                onClick={() => {
-                  setShowForm(false);
-                  setSplitAll(true);
-                  setSelectedParticipants(new Set(trip.participants));
-                }}
-                className="text-stone-400 hover:text-stone-600 text-sm px-2"
-              >
-                Cancelar
-              </button>
-            </div>
           </div>
         )}
       </div>
@@ -582,7 +696,6 @@ function PaymentsSection({
   setError: (e: string) => void;
 }) {
   const nameMap = new Map(balances.map((b) => [b.email, b.name]));
-  const imageMap = new Map(balances.map((b) => [b.email, b.image]));
   const pixMap = new Map(balances.map((b) => [b.email, b.pixKey]));
 
   function handleSettle(from: string, to: string, amount: number) {
@@ -615,7 +728,6 @@ function PaymentsSection({
           {debts.map((d, i) => {
             const fromName = nameMap.get(d.from) ?? d.from;
             const toName = nameMap.get(d.to) ?? d.to;
-            const toImage = imageMap.get(d.to) ?? null;
             const toPixKey = pixMap.get(d.to);
             const isReceiver = userEmail === d.to;
 

@@ -1,12 +1,6 @@
 import { signIn } from "@/auth";
 
-export default async function LoginPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const { error } = await searchParams;
-
+export default async function LoginPage() {
   return (
     <div className="min-h-screen bg-stone-50 flex items-center justify-center px-4">
       <div className="bg-white rounded-lg shadow-lg p-8 max-w-sm w-full text-center">

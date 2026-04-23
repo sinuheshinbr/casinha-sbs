@@ -6,6 +6,11 @@ import { revalidatePath } from "next/cache";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 
+interface BenfeitoriaDoc {
+  _id: ObjectId;
+  votes: string[];
+}
+
 export interface Benfeitoria {
   _id: string;
   description: string;
@@ -95,17 +100,17 @@ export async function toggleVote(id: string) {
 
   if (hasVoted) {
     await db
-      .collection("benfeitorias")
+      .collection<BenfeitoriaDoc>("benfeitorias")
       .updateOne(
         { _id: new ObjectId(id) },
-        { $pull: { votes: member.email } } as any
+        { $pull: { votes: member.email } }
       );
   } else {
     await db
-      .collection("benfeitorias")
+      .collection<BenfeitoriaDoc>("benfeitorias")
       .updateOne(
         { _id: new ObjectId(id) },
-        { $push: { votes: member.email } } as any
+        { $push: { votes: member.email } }
       );
   }
 

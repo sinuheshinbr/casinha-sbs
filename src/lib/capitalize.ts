@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 export function capitalize<T extends string | null | undefined>(
   s: T,
 ): T extends string ? string : null {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import { updateProfile } from "@/app/actions-profile";
 import type { UserProfile } from "@/app/actions-profile";
 
@@ -113,7 +114,7 @@ export default function ProfileForm({ profile }: { profile: UserProfile }) {
       <div className="bg-white rounded-lg shadow p-4 space-y-4">
         <div className="flex items-center gap-3">
           {profile.image ? (
-            <img
+            <Image
               src={profile.image}
               alt={profile.name}
               width={48}
