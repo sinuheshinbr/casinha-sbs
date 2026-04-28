@@ -614,7 +614,8 @@ export async function getSettlements(tripId: string): Promise<Settlement[]> {
 export async function addSettlement(tripId: string, from: string, to: string, amount: number) {
   const user = await requireUser();
   if (!user) return { error: "Faça login" };
-  if (user.email !== to) return { error: "Apenas quem recebeu pode confirmar" };
+  if (user.email !== to && user.email !== from)
+    return { error: "Apenas quem pagou ou recebeu pode confirmar" };
 
   const db = getDb();
   const trip = await db
@@ -646,8 +647,8 @@ export async function removeSettlement(id: string) {
     .collection("trip_settlements")
     .findOne({ _id: new ObjectId(id) });
   if (!doc) return { error: "Não encontrado" };
-  if (doc.to !== user.email)
-    return { error: "Apenas quem confirmou pode desfazer" };
+  if (doc.to !== user.email && doc.from !== user.email)
+    return { error: "Apenas quem pagou ou recebeu pode desfazer" };
 
   await db
     .collection("trip_settlements")

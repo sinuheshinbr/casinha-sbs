@@ -910,7 +910,7 @@ function PaymentsSection({
             const fromName = nameMap.get(d.from) ?? d.from;
             const toName = nameMap.get(d.to) ?? d.to;
             const toPixKey = pixMap.get(d.to);
-            const isReceiver = userEmail === d.to;
+            const canSettle = userEmail === d.to || userEmail === d.from;
 
             return (
               <div key={i} className="border border-stone-200 rounded-lg p-3">
@@ -939,7 +939,7 @@ function PaymentsSection({
                     </button>
                   </div>
                 )}
-                {isReceiver && (
+                {canSettle && (
                   <button
                     onClick={() => handleSettle(d.from, d.to, d.amount)}
                     disabled={isPending}
@@ -969,7 +969,7 @@ function PaymentsSection({
             {settlements.map((s) => {
               const fromName = nameMap.get(s.from) ?? s.from;
               const toName = nameMap.get(s.to) ?? s.to;
-              const isReceiver = userEmail === s.to;
+              const canUnsettle = userEmail === s.to || userEmail === s.from;
 
               return (
                 <div
@@ -981,7 +981,7 @@ function PaymentsSection({
                       {fromName} pagou {currency(s.amount)} para {toName}
                     </span>
                   </div>
-                  {isReceiver && (
+                  {canUnsettle && (
                     <button
                       onClick={() => handleUnsettle(s._id)}
                       disabled={isPending}
