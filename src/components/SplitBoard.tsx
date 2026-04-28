@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useTransition, useSyncExternalStore } from "react";
 import Image from "next/image";
 import { capitalize } from "@/lib/capitalize";
 
@@ -17,8 +17,9 @@ import {
   removeParticipant,
   addSettlement,
   removeSettlement,
+  searchUsers,
 } from "@/app/actions-split";
-import type { Trip, TripExpense, Balance, Debt, Settlement } from "@/app/actions-split";
+import type { Trip, TripExpense, Balance, Debt, Settlement, UserSuggestion } from "@/app/actions-split";
 
 function currency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -302,22 +303,109 @@ export function TripList({
   const [isPending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [emails, setEmails] = useState("");
+  const [selectedParticipants, setSelectedParticipants] = useState<UserSuggestion[]>([]);
+  const [query, setQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const searchSeq = useRef(0);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setSuggestions([]);
+      setHighlightIdx(-1);
+      return;
+    }
+    const seq = ++searchSeq.current;
+    const handle = setTimeout(async () => {
+      const exclude = [userEmail, ...selectedParticipants.map((p) => p.email)];
+      const results = await searchUsers(q, exclude);
+      if (seq !== searchSeq.current) return;
+      setSuggestions(results);
+      setHighlightIdx(-1);
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [query, selectedParticipants, userEmail]);
+
+  function pickSuggestion(s: UserSuggestion) {
+    setSelectedParticipants((prev) =>
+      prev.some((p) => p.email === s.email) ? prev : [...prev, s]
+    );
+    setQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  function addRawEmail() {
+    const raw = query.trim().toLowerCase();
+    if (!raw) return;
+    if (raw === userEmail.toLowerCase()) {
+      setQuery("");
+      return;
+    }
+    if (selectedParticipants.some((p) => p.email === raw)) {
+      setQuery("");
+      return;
+    }
+    setSelectedParticipants((prev) => [
+      ...prev,
+      { email: raw, name: raw, image: null },
+    ]);
+    setQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+  }
+
+  function removeSelected(email: string) {
+    setSelectedParticipants((prev) => prev.filter((p) => p.email !== email));
+  }
+
+  function handleQueryKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightIdx((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowSuggestions(false);
+        return;
+      }
+      if (e.key === "Enter" && highlightIdx >= 0) {
+        e.preventDefault();
+        pickSuggestion(suggestions[highlightIdx]);
+        return;
+      }
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addRawEmail();
+      return;
+    }
+    if (e.key === "Backspace" && !query && selectedParticipants.length > 0) {
+      setSelectedParticipants((prev) => prev.slice(0, -1));
+    }
+  }
 
   function handleCreate() {
     if (!name.trim()) return;
     setError("");
-    const participantEmails = emails
-      .split(/[,;\n]/)
-      .map((e) => e.trim())
-      .filter(Boolean);
+    const participantEmails = selectedParticipants.map((p) => p.email);
     startTransition(async () => {
       const r = await createTrip(name, participantEmails);
       if (r.error) {
         setError(r.error);
       } else {
         setName("");
-        setEmails("");
+        setSelectedParticipants([]);
+        setQuery("");
         setShowForm(false);
       }
     });
@@ -393,13 +481,69 @@ export function TripList({
             placeholder="Nome da viagem"
             className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm"
           />
-          <textarea
-            value={emails}
-            onChange={(e) => setEmails(e.target.value)}
-            placeholder="Emails dos participantes (separados por vírgula ou um por linha)"
-            rows={3}
-            className="w-full border border-stone-300 rounded-lg px-3 py-2 text-sm resize-none"
-          />
+          <div className="border border-stone-300 rounded-lg px-2 py-1.5">
+            <div className="flex flex-wrap gap-1 items-center">
+              {selectedParticipants.map((p) => (
+                <span
+                  key={p.email}
+                  className="inline-flex items-center gap-1 bg-stone-100 rounded-full pl-1 pr-2 py-0.5 text-xs"
+                >
+                  <Avatar name={p.name} image={p.image} size={18} />
+                  <span className="text-stone-700">{p.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeSelected(p.email)}
+                    className="text-stone-400 hover:text-red-500 font-bold leading-none"
+                  >
+                    &times;
+                  </button>
+                </span>
+              ))}
+              <div className="flex-1 min-w-[8rem] relative">
+                <input
+                  type="text"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setShowSuggestions(true);
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  onKeyDown={handleQueryKeyDown}
+                  placeholder={
+                    selectedParticipants.length === 0
+                      ? "Nome ou email dos participantes"
+                      : ""
+                  }
+                  autoComplete="off"
+                  className="w-full text-sm outline-none px-1 py-0.5"
+                />
+                {showSuggestions && suggestions.length > 0 && (
+                  <ul className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+                    {suggestions.map((s, i) => (
+                      <li
+                        key={s.email}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          pickSuggestion(s);
+                        }}
+                        onMouseEnter={() => setHighlightIdx(i)}
+                        className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
+                          i === highlightIdx ? "bg-stone-100" : ""
+                        }`}
+                      >
+                        <Avatar name={s.name} image={s.image} />
+                        <span className="text-stone-700 truncate">{s.name}</span>
+                        <span className="text-xs text-stone-400 truncate ml-auto">
+                          {s.email}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               onClick={handleCreate}
@@ -874,12 +1018,65 @@ function ParticipantsSection({
 }) {
   const [newEmail, setNewEmail] = useState("");
   const [copyLabel, setCopyLabel] = useState("Copiar link");
+  const [suggestions, setSuggestions] = useState<UserSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const searchSeq = useRef(0);
   const origin = useSyncExternalStore(
     subscribeLocation,
     getLocationOrigin,
     getServerLocationOrigin
   );
   const inviteUrl = origin ? `${origin}/split/join/${trip._id}` : "";
+
+  useEffect(() => {
+    const q = newEmail.trim();
+    if (!q) {
+      setSuggestions([]);
+      setHighlightIdx(-1);
+      return;
+    }
+    const seq = ++searchSeq.current;
+    const handle = setTimeout(async () => {
+      const results = await searchUsers(q, trip.participants);
+      if (seq !== searchSeq.current) return;
+      setSuggestions(results);
+      setHighlightIdx(-1);
+    }, 200);
+    return () => clearTimeout(handle);
+  }, [newEmail, trip.participants]);
+
+  function pickSuggestion(s: UserSuggestion) {
+    setNewEmail(s.email);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlightIdx((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlightIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowSuggestions(false);
+        return;
+      }
+      if (e.key === "Enter" && highlightIdx >= 0) {
+        e.preventDefault();
+        pickSuggestion(suggestions[highlightIdx]);
+        return;
+      }
+    }
+    if (e.key === "Enter") handleAdd();
+  }
 
   function handleAdd() {
     if (!newEmail.trim()) return;
@@ -890,7 +1087,11 @@ function ParticipantsSection({
     startTransition(async () => {
       const r = await addParticipant(trip._id, newEmail, addToAll);
       if (r.error) setError(r.error);
-      else setNewEmail("");
+      else {
+        setNewEmail("");
+        setShowSuggestions(false);
+        setSuggestions([]);
+      }
     });
   }
 
@@ -936,14 +1137,45 @@ function ParticipantsSection({
         ))}
       </div>
       <div className="flex gap-2">
-        <input
-          type="email"
-          value={newEmail}
-          onChange={(e) => setNewEmail(e.target.value)}
-          placeholder="Email do participante"
-          className="flex-1 border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-        />
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={newEmail}
+            onChange={(e) => {
+              setNewEmail(e.target.value);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="Nome ou email do participante"
+            autoComplete="off"
+            className="w-full border border-stone-300 rounded-lg px-3 py-1.5 text-sm"
+            onKeyDown={handleKeyDown}
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute z-10 left-0 right-0 top-full mt-1 bg-white border border-stone-200 rounded-lg shadow-lg max-h-60 overflow-auto">
+              {suggestions.map((s, i) => (
+                <li
+                  key={s.email}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickSuggestion(s);
+                  }}
+                  onMouseEnter={() => setHighlightIdx(i)}
+                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer text-sm ${
+                    i === highlightIdx ? "bg-stone-100" : ""
+                  }`}
+                >
+                  <Avatar name={s.name} image={s.image} />
+                  <span className="text-stone-700 truncate">{s.name}</span>
+                  <span className="text-xs text-stone-400 truncate ml-auto">
+                    {s.email}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button
           onClick={handleAdd}
           disabled={isPending || !newEmail.trim()}

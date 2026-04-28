@@ -4,6 +4,7 @@ import { getDb } from "@/lib/mongodb";
 import { revalidatePath } from "next/cache";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
+import { MEMBERS } from "@/lib/members";
 
 // MongoDB document shapes (used to type $push/$pull operations)
 
@@ -98,6 +99,61 @@ async function resolveUsers(emails: string[]): Promise<{
     if (!pixMap.has(e)) pixMap.set(e, null);
   }
   return { nameMap, imageMap, pixMap };
+}
+
+// --- User search (for participant autocomplete) ---
+
+export interface UserSuggestion {
+  email: string;
+  name: string;
+  image: string | null;
+}
+
+export async function searchUsers(
+  query: string,
+  excludeEmails: string[] = []
+): Promise<UserSuggestion[]> {
+  const user = await requireUser();
+  if (!user) return [];
+  const q = query.trim();
+  if (!q) return [];
+
+  const escaped = q.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+  const regex = new RegExp(escaped, "i");
+  const exclude = new Set(excludeEmails.map((e) => e.toLowerCase()));
+
+  const merged = new Map<string, UserSuggestion>();
+
+  for (const m of MEMBERS) {
+    const email = m.email.toLowerCase();
+    if (exclude.has(email)) continue;
+    if (regex.test(m.name) || regex.test(email)) {
+      merged.set(email, { email, name: m.name, image: null });
+    }
+  }
+
+  const db = getDb();
+  const docs = await db
+    .collection("users")
+    .find({
+      email: { $nin: [...exclude] },
+      $or: [{ email: regex }, { name: regex }],
+    })
+    .project({ email: 1, name: 1, image: 1 })
+    .limit(10)
+    .toArray();
+
+  for (const d of docs) {
+    const email = (d.email as string).toLowerCase();
+    const existing = merged.get(email);
+    merged.set(email, {
+      email,
+      name: (d.name as string) ?? existing?.name ?? email,
+      image: (d.image as string) ?? existing?.image ?? null,
+    });
+  }
+
+  return Array.from(merged.values()).slice(0, 6);
 }
 
 // --- Trips ---
