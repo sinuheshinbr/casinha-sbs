@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
 import { MEMBERS } from "@/lib/members";
+import { calculateDebts } from "@/lib/split";
 
 // MongoDB document shapes (used to type $push/$pull operations)
 
@@ -63,6 +64,15 @@ export interface Debt {
   from: string;
   to: string;
   amount: number;
+}
+
+export interface PendingSettlement {
+  _id: string;
+  tripId: string;
+  from: string;
+  to: string;
+  amount: number;
+  createdAt: string;
 }
 
 // Auth helper
@@ -653,6 +663,114 @@ export async function removeSettlement(id: string) {
   await db
     .collection("trip_settlements")
     .deleteOne({ _id: new ObjectId(id) });
+  revalidatePath("/split");
+  return { success: true };
+}
+
+// --- Pending Settlements (acertos fechados) ---
+
+export async function getPendingSettlements(
+  tripId: string
+): Promise<PendingSettlement[]> {
+  const user = await requireUser();
+  if (!user) return [];
+
+  const db = getDb();
+  const trip = await db
+    .collection("trips")
+    .findOne({ _id: new ObjectId(tripId) });
+  if (!trip || !(trip.participants as string[]).includes(user.email)) return [];
+
+  const docs = await db
+    .collection("trip_pending_settlements")
+    .find({ tripId })
+    .sort({ amount: -1 })
+    .toArray();
+
+  return docs.map((doc) => ({
+    _id: doc._id.toString(),
+    tripId: doc.tripId as string,
+    from: doc.from as string,
+    to: doc.to as string,
+    amount: doc.amount as number,
+    createdAt: (doc.createdAt as Date).toISOString(),
+  }));
+}
+
+export async function closeTripDebts(tripId: string) {
+  const user = await requireUser();
+  if (!user) return { error: "Faça login" };
+
+  const db = getDb();
+  const trip = await db
+    .collection("trips")
+    .findOne({ _id: new ObjectId(tripId) });
+  if (!trip) return { error: "Viagem não encontrada" };
+  const participants = trip.participants as string[];
+  if (!participants.includes(user.email)) return { error: "Sem permissão" };
+
+  const already = await db
+    .collection("trip_pending_settlements")
+    .countDocuments({ tripId });
+  if (already > 0) return { error: "Acertos já estão fechados" };
+
+  const balances = await getTripBalances(tripId);
+  const debts = calculateDebts(balances);
+  if (debts.length === 0) return { error: "Não há dívidas para fechar" };
+
+  await db.collection("trip_pending_settlements").insertMany(
+    debts.map((d) => ({
+      tripId,
+      from: d.from,
+      to: d.to,
+      amount: d.amount,
+      createdAt: new Date(),
+    }))
+  );
+  revalidatePath("/split");
+  return { success: true };
+}
+
+export async function reopenTripDebts(tripId: string) {
+  const user = await requireUser();
+  if (!user) return { error: "Faça login" };
+
+  const db = getDb();
+  const trip = await db
+    .collection("trips")
+    .findOne({ _id: new ObjectId(tripId) });
+  if (!trip) return { error: "Viagem não encontrada" };
+  const participants = trip.participants as string[];
+  if (!participants.includes(user.email)) return { error: "Sem permissão" };
+
+  await db.collection("trip_pending_settlements").deleteMany({ tripId });
+  revalidatePath("/split");
+  return { success: true };
+}
+
+export async function payPendingSettlement(pendingId: string) {
+  const user = await requireUser();
+  if (!user) return { error: "Faça login" };
+
+  const db = getDb();
+  const pending = await db
+    .collection("trip_pending_settlements")
+    .findOne({ _id: new ObjectId(pendingId) });
+  if (!pending) return { error: "Acerto não encontrado" };
+  if (pending.from !== user.email && pending.to !== user.email)
+    return { error: "Apenas quem pagou ou recebeu pode confirmar" };
+
+  await db.collection("trip_settlements").insertOne({
+    tripId: pending.tripId as string,
+    from: pending.from as string,
+    to: pending.to as string,
+    amount: pending.amount as number,
+    createdAt: new Date(),
+  });
+  await db
+    .collection("trip_pending_settlements")
+    .deleteOne({ _id: new ObjectId(pendingId) });
+
   revalidatePath("/split");
   return { success: true };
 }

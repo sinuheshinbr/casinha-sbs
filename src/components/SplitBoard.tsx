@@ -18,8 +18,19 @@ import {
   addSettlement,
   removeSettlement,
   searchUsers,
+  closeTripDebts,
+  reopenTripDebts,
+  payPendingSettlement,
 } from "@/app/actions-split";
-import type { Trip, TripExpense, Balance, Debt, Settlement, UserSuggestion } from "@/app/actions-split";
+import type {
+  Trip,
+  TripExpense,
+  Balance,
+  Debt,
+  Settlement,
+  PendingSettlement,
+  UserSuggestion,
+} from "@/app/actions-split";
 
 function currency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -572,6 +583,8 @@ export function TripDetail({
   expenses,
   balances,
   debts,
+  pendings,
+  closed,
   settlements,
   userEmail,
 }: {
@@ -579,6 +592,8 @@ export function TripDetail({
   expenses: TripExpense[];
   balances: Balance[];
   debts: Debt[];
+  pendings: PendingSettlement[];
+  closed: boolean;
   settlements: Settlement[];
   userEmail: string;
 }) {
@@ -724,6 +739,8 @@ export function TripDetail({
       <PaymentsSection
         trip={trip}
         debts={debts}
+        pendings={pendings}
+        closed={closed}
         settlements={settlements}
         balances={balances}
         userEmail={userEmail}
@@ -860,6 +877,8 @@ export function TripDetail({
 function PaymentsSection({
   trip,
   debts,
+  pendings,
+  closed,
   settlements,
   balances,
   userEmail,
@@ -869,6 +888,8 @@ function PaymentsSection({
 }: {
   trip: Trip;
   debts: Debt[];
+  pendings: PendingSettlement[];
+  closed: boolean;
   settlements: Settlement[];
   balances: Balance[];
   userEmail: string;
@@ -895,66 +916,180 @@ function PaymentsSection({
     });
   }
 
+  function handleClose() {
+    if (
+      !confirm(
+        "Fechar os acertos congela as sugestões atuais. Quem vai pagar quem não muda mais até alguém reabrir. Continuar?"
+      )
+    )
+      return;
+    setError("");
+    startTransition(async () => {
+      const r = await closeTripDebts(trip._id);
+      if (r.error) setError(r.error);
+    });
+  }
+
+  function handleReopen() {
+    if (
+      !confirm(
+        "Reabrir vai recalcular todas as sugestões com base nos saldos atuais. Pagamentos já confirmados continuam registrados. Continuar?"
+      )
+    )
+      return;
+    setError("");
+    startTransition(async () => {
+      const r = await reopenTripDebts(trip._id);
+      if (r.error) setError(r.error);
+    });
+  }
+
+  function handlePayPending(pendingId: string) {
+    setError("");
+    startTransition(async () => {
+      const r = await payPendingSettlement(pendingId);
+      if (r.error) setError(r.error);
+    });
+  }
+
   const hasDebts = debts.length > 0;
+  const hasPendings = pendings.length > 0;
   const hasSettlements = settlements.length > 0;
 
-  if (!hasDebts && !hasSettlements) return null;
+  if (!hasDebts && !hasPendings && !hasSettlements) return null;
+
+  const closedAt = closed
+    ? pendings.reduce<string | null>(
+        (min, p) => (min === null || p.createdAt < min ? p.createdAt : min),
+        null
+      )
+    : null;
+  const closedAtLabel = closedAt
+    ? new Date(closedAt).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : null;
+
+  function PairRow({
+    from,
+    to,
+    amount,
+    onPay,
+  }: {
+    from: string;
+    to: string;
+    amount: number;
+    onPay?: () => void;
+  }) {
+    const fromName = nameMap.get(from) ?? from;
+    const toName = nameMap.get(to) ?? to;
+    const toPixKey = pixMap.get(to);
+    const canSettle = userEmail === to || userEmail === from;
+
+    return (
+      <div className="border border-stone-200 rounded-lg p-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span className="text-sm text-stone-800">
+              <span className="font-medium">{fromName}</span>
+              {" deve "}
+              <span className="font-medium">{currency(amount)}</span>
+              {" para "}
+              <span className="font-medium">{toName}</span>
+            </span>
+          </div>
+        </div>
+        {toPixKey && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <span className="text-xs text-stone-400">PIX:</span>
+            <span className="text-xs text-stone-600 font-mono bg-stone-50 px-1.5 py-0.5 rounded select-all">
+              {formatPixDisplay(toPixKey)}
+            </span>
+            <button
+              onClick={() => navigator.clipboard.writeText(toPixKey)}
+              className="text-xs text-green-700 hover:text-green-900 font-medium"
+            >
+              Copiar
+            </button>
+          </div>
+        )}
+        {canSettle && onPay && (
+          <button
+            onClick={onPay}
+            disabled={isPending}
+            className="mt-2 text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors font-medium"
+          >
+            Marcar como pago
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow p-4">
       <h3 className="font-semibold text-stone-800 mb-3">Pagamentos</h3>
 
-      {debts.length > 0 && (
-        <div className="space-y-3 mb-3">
-          {debts.map((d, i) => {
-            const fromName = nameMap.get(d.from) ?? d.from;
-            const toName = nameMap.get(d.to) ?? d.to;
-            const toPixKey = pixMap.get(d.to);
-            const canSettle = userEmail === d.to || userEmail === d.from;
-
-            return (
-              <div key={i} className="border border-stone-200 rounded-lg p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0 flex-1">
-                    <span className="text-sm text-stone-800">
-                      <span className="font-medium">{fromName}</span>
-                      {" deve "}
-                      <span className="font-medium">{currency(d.amount)}</span>
-                      {" para "}
-                      <span className="font-medium">{toName}</span>
-                    </span>
-                  </div>
-                </div>
-                {toPixKey && (
-                  <div className="mt-1.5 flex items-center gap-1.5">
-                    <span className="text-xs text-stone-400">PIX:</span>
-                    <span className="text-xs text-stone-600 font-mono bg-stone-50 px-1.5 py-0.5 rounded select-all">
-                      {formatPixDisplay(toPixKey)}
-                    </span>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(toPixKey)}
-                      className="text-xs text-green-700 hover:text-green-900 font-medium"
-                    >
-                      Copiar
-                    </button>
-                  </div>
-                )}
-                {canSettle && (
-                  <button
-                    onClick={() => handleSettle(d.from, d.to, d.amount)}
-                    disabled={isPending}
-                    className="mt-2 text-xs bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors font-medium"
-                  >
-                    Marcar como pago
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      {closed && (
+        <div className="mb-3 flex items-center justify-between gap-2 bg-stone-50 border border-stone-200 rounded-lg px-3 py-2">
+          <span className="text-xs text-stone-600">
+            Acertos fechados{closedAtLabel ? ` em ${closedAtLabel}` : ""}. Quem
+            paga quem não muda mais.
+          </span>
+          <button
+            onClick={handleReopen}
+            disabled={isPending}
+            className="text-xs text-green-700 hover:text-green-900 font-medium whitespace-nowrap"
+          >
+            Reabrir
+          </button>
         </div>
       )}
 
-      {debts.length === 0 && (
+      {hasPendings && (
+        <div className="space-y-3 mb-3">
+          {pendings.map((p) => (
+            <PairRow
+              key={p._id}
+              from={p.from}
+              to={p.to}
+              amount={p.amount}
+              onPay={() => handlePayPending(p._id)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!closed && hasDebts && (
+        <div className="space-y-3 mb-3">
+          {debts.map((d, i) => (
+            <PairRow
+              key={i}
+              from={d.from}
+              to={d.to}
+              amount={d.amount}
+              onPay={() => handleSettle(d.from, d.to, d.amount)}
+            />
+          ))}
+        </div>
+      )}
+
+      {!closed && hasDebts && (
+        <div className="mb-3">
+          <button
+            onClick={handleClose}
+            disabled={isPending}
+            className="w-full bg-stone-800 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-stone-900 disabled:opacity-50 transition-colors"
+            title="Congela as sugestões atuais para que não mudem mais"
+          >
+            Fechar acertos
+          </button>
+        </div>
+      )}
+
+      {!hasDebts && !hasPendings && (
         <p className="text-sm text-green-600 font-medium mb-3">
           Todas as dívidas foram quitadas!
         </p>
