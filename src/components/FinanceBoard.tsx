@@ -639,7 +639,7 @@ function IncomeSection({
         </div>
       )}
 
-      {isAdmin && !showForm && (
+      {(visitante || isAdmin) && !showForm && (
         <button
           onClick={() => setShowForm(true)}
           className="text-sm text-green-700 hover:text-green-900 font-medium"
@@ -648,7 +648,7 @@ function IncomeSection({
         </button>
       )}
 
-      {isAdmin && showForm && (
+      {(visitante || isAdmin) && showForm && (
         <div className="border-t border-stone-200 pt-3 mt-3 space-y-2">
           <div className="flex gap-2">
             <select

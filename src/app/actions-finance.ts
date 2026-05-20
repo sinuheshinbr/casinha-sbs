@@ -207,8 +207,13 @@ export async function addIncome(
   amount: number,
   visitante: boolean = true
 ) {
-  const admin = await requireFinanceAdmin();
-  if (!admin) return { error: "Sem permissão" };
+  if (visitante) {
+    const member = await requireMember();
+    if (!member) return { error: "Sem permissão" };
+  } else {
+    const admin = await requireFinanceAdmin();
+    if (!admin) return { error: "Sem permissão" };
+  }
   if (amount <= 0) return { error: "Valor inválido" };
 
   const db = getDb();
