@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { getMemberByEmail, canEditFinance, MEMBERS } from "@/lib/members";
+import { getMemberByEmail, canEditFinance, getMembersForMonth, MEMBERS } from "@/lib/members";
 import { getDb } from "@/lib/mongodb";
 import {
   getCurrentMonth,
@@ -84,6 +84,9 @@ export default async function FinanceiroPage({
     email: m.email.toLowerCase(),
     name: nameMap.get(m.email.toLowerCase()) || m.name,
   }));
+  // Quem saiu só entra no rateio e nas faxinas dos meses em que ainda morava aqui
+  const monthEmails = new Set(getMembersForMonth(month).map((m) => m.email.toLowerCase()));
+  const monthMembers = allMembers.filter((m) => monthEmails.has(m.email));
 
   return (
     <div className="space-y-4">
@@ -153,19 +156,20 @@ export default async function FinanceiroPage({
         faxinas={faxinas}
         energias={energias}
         totalExpenses={totalExpenses}
-        members={allMembers}
+        members={monthMembers}
         isAdmin={isAdmin}
       />
 
       <FaxinaBoard
         faxinas={faxinas}
         month={month}
-        members={allMembers}
+        members={monthMembers}
+        nameMap={Object.fromEntries(nameMap)}
         isAdmin={isAdmin}
         defaultParticipants={[...new Set(
           lastWeekendReservations
             .map((r) => r.memberEmail.toLowerCase())
-            .filter((email) => MEMBERS.some((m) => m.email.toLowerCase() === email))
+            .filter((email) => monthEmails.has(email))
         )]}
         defaultExtraVisits={[...new Set(
           lastWeekendReservations

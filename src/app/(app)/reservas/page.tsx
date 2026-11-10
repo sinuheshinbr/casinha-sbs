@@ -5,7 +5,7 @@ import {
   getWeekendInfo,
   shiftWeekend,
 } from "@/lib/dates";
-import { TOTAL_SPOTS, MEMBERS, getMemberByEmail } from "@/lib/members";
+import { TOTAL_SPOTS, MEMBERS, getMemberByEmail, getMembersForMonth } from "@/lib/members";
 import { getDb } from "@/lib/mongodb";
 import ReservationBoard from "@/components/ReservationBoard";
 import { auth } from "@/auth";
@@ -55,10 +55,13 @@ export default async function ReservasPage({
   for (const u of dbUsers) {
     nameMap.set(u.email as string, u.name as string);
   }
-  const allMembers = MEMBERS.filter((m) => m.email).map((m) => ({
-    email: m.email.toLowerCase(),
-    name: nameMap.get(m.email.toLowerCase()) || m.name,
-  }));
+  // Quem morava aqui no mês do fim de semana (quem saiu some dos próximos)
+  const allMembers = getMembersForMonth(weekendKey.slice(0, 7))
+    .filter((m) => m.email)
+    .map((m) => ({
+      email: m.email.toLowerCase(),
+      name: nameMap.get(m.email.toLowerCase()) || m.name,
+    }));
 
   return (
     <>

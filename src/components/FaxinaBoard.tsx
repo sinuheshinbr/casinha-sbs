@@ -20,6 +20,7 @@ interface Props {
   faxinas: Faxina[];
   month: string;
   members: MemberEntry[];
+  nameMap: Record<string, string>;
   isAdmin: boolean;
   defaultParticipants: string[];
   defaultExtraVisits: string[];
@@ -34,6 +35,7 @@ export default function FaxinaBoard({
   faxinas,
   month,
   members,
+  nameMap: nameMapProp,
   isAdmin,
   defaultParticipants,
   defaultExtraVisits,
@@ -136,7 +138,7 @@ export default function FaxinaBoard({
     });
   }
 
-  const nameMap = new Map(members.map((m) => [m.email, m.name]));
+  const nameMap = new Map(Object.entries(nameMapProp));
 
   return (
     <div className="bg-white rounded-lg shadow p-4">

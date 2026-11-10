@@ -1,7 +1,7 @@
 "use server";
 
 import { getDb } from "@/lib/mongodb";
-import { getMemberByEmail, canEditFinance, MEMBERS } from "@/lib/members";
+import { getMemberByEmail, canEditFinance, getMembersForMonth } from "@/lib/members";
 import { revalidatePath } from "next/cache";
 import { ObjectId } from "mongodb";
 import { auth } from "@/auth";
@@ -150,7 +150,7 @@ export async function getPayments(month: string): Promise<MemberPayment[]> {
 export async function markPaid(month: string, memberEmail: string, amount: number) {
   const admin = await requireFinanceAdmin();
   if (!admin) return { error: "Sem permissão" };
-  if (!MEMBERS.find((m) => m.email.toLowerCase() === memberEmail.toLowerCase()))
+  if (!getMembersForMonth(month).some((m) => m.email.toLowerCase() === memberEmail.toLowerCase()))
     return { error: "Membro inválido" };
 
   const db = getDb();
